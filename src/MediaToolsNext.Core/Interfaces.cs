@@ -41,3 +41,8 @@ public interface IHardwareTuner
 {
     HardwareProfile Recommend(string sourcePath, string targetPath);
 }
+
+public interface IScanPreviewService
+{
+    Task<ScanPreview> PreviewAsync(ScanOptions options, CancellationToken cancellationToken);
+}

@@ -23,6 +23,14 @@ foreach (var tool in tools.GetStatuses())
 
 Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={tuning.RecommendedProbeSeconds}, buffer={tuning.RecommendedCopyBufferBytes}, {tuning.Rationale}");
 var options = new ScanOptions(source, target, backup, mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
+if (args.Contains("--preview"))
+{
+    var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
+    Console.WriteLine($"Preview: {preview.TotalFiles} files, {preview.TotalBytes / 1048576d:N1} MB");
+    foreach (var item in preview.FilesByCategory.Where(x => x.Value > 0))
+        Console.WriteLine($"- {item.Key}: {item.Value}");
+    return;
+}
 var pipeline = new ScannerPipeline(
     new FileDiscoverer(),
     [new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)],

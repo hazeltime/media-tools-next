@@ -3,6 +3,7 @@
 @inject IScannerPipeline Pipeline
 @inject IExternalToolProbe ToolProbe
 @inject IHardwareTuner HardwareTuner
+@inject IScanPreviewService PreviewService
 
 <div class="scanner-shell">
     <header>
@@ -11,6 +12,7 @@
             <p>Scan, classify, sort, and mirror media files with dry-run safety by default.</p>
         </div>
         <button disabled="@_running" @onclick="RunAsync">@(_running ? "Scanning..." : "Start scan")</button>
+        <button disabled="@_running" @onclick="PreviewAsync">Preview</button>
     </header>
 
     <section class="panel grid">
@@ -42,6 +44,7 @@
         }
     </section>
     <section class="panel">Auto tuning: @_hardware?.Rationale; recommended concurrency @_hardware?.RecommendedConcurrency.</section>
+    <section class="panel">Preview: @_preview?.TotalFiles files, @((_preview?.TotalBytes ?? 0) / 1048576d).ToString("N1") MB.</section>
 
     <section class="stats">
         <strong>Total</strong><span>@_summary?.Total</span>
@@ -80,6 +83,7 @@
     private bool _running;
     private ScanSummary? _summary;
     private ScanPerformance _performance = new(TimeSpan.Zero, 0, 0);
+    private ScanPreview? _preview;
     private readonly List<ScanResultRecord> _results = [];
 
     private async Task RunAsync()
@@ -100,6 +104,14 @@
         });
         try { _summary = await Pipeline.RunAsync(options, progress, CancellationToken.None); }
         finally { _running = false; }
+    }
+
+    private async Task PreviewAsync()
+    {
+        var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
+        var profile = ScanProfiles.Get(_profileName);
+        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
+        _preview = await PreviewService.PreviewAsync(options, CancellationToken.None);
     }
 
     private HardwareProfile? _hardware;

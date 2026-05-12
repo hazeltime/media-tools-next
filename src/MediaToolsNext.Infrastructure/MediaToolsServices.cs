@@ -10,6 +10,7 @@ public static class MediaToolsServices
         services.AddSingleton<IExternalToolProbe, ExternalToolProbe>();
         services.AddSingleton<IHardwareTuner, HardwareTuner>();
         services.AddSingleton<IFileDiscoverer, FileDiscoverer>();
+        services.AddSingleton<IScanPreviewService, ScanPreviewService>();
         services.AddSingleton<IFileActionService, FileActionService>();
         services.AddSingleton<IMediaValidator, ImageValidator>();
         services.AddSingleton<IMediaValidator>(sp => new MediaStreamValidator(MediaCategory.Video, sp.GetRequiredService<IExternalToolProbe>()));
