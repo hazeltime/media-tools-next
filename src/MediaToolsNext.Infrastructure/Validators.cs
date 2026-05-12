@@ -21,6 +21,8 @@ public sealed class ImageValidator(IExternalToolProbe tools) : IMediaValidator
             var header = ImageHeaderAnalyzer.Detect(candidate.FullPath);
             if (header == "unknown")
                 return Done(ValidationStatus.Unknown, "unknown_or_invalid_header");
+            if (options.ValidationDepth == ValidationDepth.Fast)
+                return Done(ValidationStatus.Valid, "header_match_fast_mode");
 
             var magick = tools.FindExecutable("magick");
             if (magick is null)
@@ -63,7 +65,19 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
         if (result.TimedOut)
             return new(candidate, ValidationStatus.Corrupt, "ffprobe", "timeout", sw.Elapsed);
         if (result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.StandardOutput))
-            return new(candidate, ValidationStatus.Valid, "ffprobe", null, sw.Elapsed);
+        {
+            if (options.ValidationDepth != ValidationDepth.Deep || Category == MediaCategory.Audio)
+                return new(candidate, ValidationStatus.Valid, "ffprobe", null, sw.Elapsed);
+
+            var ffmpeg = tools.FindExecutable("ffmpeg");
+            if (ffmpeg is null)
+                return new(candidate, ValidationStatus.Valid, "ffprobe", "ffmpeg_missing_after_ffprobe_ok", sw.Elapsed);
+            var deep = await _runner.RunAsync(ffmpeg, ["-v", "error", "-t", options.MediaProbeSeconds.ToString(), "-i", candidate.FullPath, "-f", "null", "-"], TimeSpan.FromSeconds(options.MediaProbeSeconds + 30), cancellationToken);
+            if (deep.TimedOut) return new(candidate, ValidationStatus.Corrupt, "ffmpeg", "timeout", sw.Elapsed);
+            return deep.ExitCode == 0 && string.IsNullOrWhiteSpace(deep.StandardError)
+                ? new(candidate, ValidationStatus.Valid, "ffmpeg", null, sw.Elapsed)
+                : new(candidate, ValidationStatus.Corrupt, "ffmpeg", string.IsNullOrWhiteSpace(deep.StandardError) ? deep.StandardOutput : deep.StandardError, sw.Elapsed);
+        }
         return new(candidate, ValidationStatus.Corrupt, "ffprobe", string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardOutput : result.StandardError, sw.Elapsed);
     }
 }
@@ -104,4 +118,3 @@ public sealed class DocumentValidator(IExternalToolProbe tools) : IMediaValidato
         }
     }
 }
-

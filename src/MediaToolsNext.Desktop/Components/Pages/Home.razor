@@ -82,7 +82,7 @@
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
         _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
         var profile = ScanProfiles.Get(_profileName);
-        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db);
+        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
         var progress = new Progress<ScanResultRecord>(record =>
         {
             _results.Add(record);

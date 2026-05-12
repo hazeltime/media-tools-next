@@ -22,7 +22,7 @@ foreach (var tool in tools.GetStatuses())
     Console.WriteLine($"- {tool.Name}: {(tool.IsAvailable ? tool.Path : "missing")}");
 
 Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={tuning.RecommendedProbeSeconds}, buffer={tuning.RecommendedCopyBufferBytes}, {tuning.Rationale}");
-var options = new ScanOptions(source, target, backup, mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, concurrency, profile.MediaProbeSeconds, db);
+var options = new ScanOptions(source, target, backup, mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
 var pipeline = new ScannerPipeline(
     new FileDiscoverer(),
     [new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)],

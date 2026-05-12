@@ -18,4 +18,10 @@ public class ScanProfileTests
         Assert.False(profile.EnableVideo);
         Assert.False(profile.EnableAudio);
     }
+
+    [Fact]
+    public void DeepSortUsesDeepValidation()
+    {
+        Assert.Equal(ValidationDepth.Deep, ScanProfiles.DeepSort.ValidationDepth);
+    }
 }
