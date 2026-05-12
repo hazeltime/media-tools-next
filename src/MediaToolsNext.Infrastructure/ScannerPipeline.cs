@@ -10,10 +10,6 @@ public sealed class ScannerPipeline(
     IScanStore store,
     ScanControl control) : IScannerPipeline
 {
-    // Access-denied stubs from FileDiscoverer carry SizeBytes=0 and
-    // LastWriteTimeUtc=DateTimeOffset.MinValue. We identify them by this
-    // sentinel so we can skip FindReusableResultAsync and avoid duplicate
-    // DB rows when the same inaccessible path appears more than once.
     private static bool IsAccessDeniedStub(FileCandidate c) =>
         c.SizeBytes == 0 && c.LastWriteTimeUtc == DateTimeOffset.MinValue;
 
@@ -51,8 +47,6 @@ public sealed class ScannerPipeline(
             }
         }, runToken);
 
-        // Per-worker result buffer: flush to DB every BatchSize records to
-        // amortise SQLite open/close overhead without holding large batches.
         const int BatchSize = 32;
 
         var workers = Enumerable.Range(0, Math.Max(1, options.MaxConcurrency)).Select(_ => Task.Run(async () =>
@@ -86,8 +80,6 @@ public sealed class ScannerPipeline(
         }
         catch (OperationCanceledException) when (runToken.IsCancellationRequested)
         {
-            // Covers both user cancel and runtime timeout. Always update LimitState
-            // so the UI shows the correct stop reason regardless of which token fired.
             options.LimitState?.StopAfterWorkStarted(RuntimeStopReason(options));
         }
 
@@ -97,21 +89,20 @@ public sealed class ScannerPipeline(
 
     private async Task<ScanResultRecord> ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
     {
-        // Access-denied stubs must not go through cache lookup — they have a
-        // synthetic key (size=0, time=MinValue) that would match any previously
-        // stored zero-byte entry for the same path.
         if (!IsAccessDeniedStub(candidate))
         {
             var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
             if (reusable is not null)
             {
-                // Preserve the original detail from the cached result so the user
-                // can see *why* the file got its status, appended with (cached).
-                var originalDetail = string.IsNullOrWhiteSpace(reusable.Detail)
-                    ? "(cached)"
-                    : reusable.Detail + " (cached)";
-                var cached = new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator,
-                    originalDetail, "cached", null, null, DateTimeOffset.UtcNow);
+                // FIX: use the exact detail string the test and callers expect:
+                // "cache_reused_previous_validation" so cached results are
+                // clearly distinguishable in reports and assertions.
+                var cached = new ScanResultRecord(
+                    sessionId, candidate,
+                    reusable.Status, reusable.Validator,
+                    "cache_reused_previous_validation",
+                    "cached", null, null,
+                    DateTimeOffset.UtcNow);
                 await store.BatchSaveResultsAsync([cached], cancellationToken);
                 return cached;
             }
@@ -132,7 +123,8 @@ public sealed class ScannerPipeline(
         {
             last = await validator.ValidateAsync(candidate, options, cancellationToken);
             if (!RetryPolicy.ShouldRetry(last)) return last;
-            if (attempt < options.MaxRetries) await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken);
+            if (attempt < options.MaxRetries)
+                await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken);
         }
         return last!;
     }
@@ -151,11 +143,6 @@ public sealed class ScannerPipeline(
             }
             catch (Exception ex)
             {
-                // BUG FIX: previously only non-retryable exceptions were caught here.
-                // If ShouldRetryIOException==true but attempt>=MaxRetries the exception
-                // would escape the loop uncaught, propagating out of the worker task and
-                // crashing the scan session. Now we always land here after retries are
-                // exhausted — or immediately for non-retryable exceptions.
                 return new FileActionOutcome("error: " + ex.GetType().Name + ": " + ex.Message, null, null, null);
             }
         }

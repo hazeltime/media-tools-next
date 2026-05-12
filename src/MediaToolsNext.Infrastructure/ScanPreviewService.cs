@@ -8,17 +8,26 @@ public sealed class ScanPreviewService(IFileDiscoverer discoverer) : IScanPrevie
     {
         var counts = Enum.GetValues<MediaCategory>().ToDictionary(x => x, _ => 0);
         var total = 0;
+        // Use a HashSet to count distinct non-empty directory segments so that
+        // files in the source root (RelativePath has no directory component,
+        // GetDirectoryName returns "" or null) do not inflate the dir count.
         var dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long bytes = 0;
+
         await foreach (var candidate in discoverer.DiscoverAsync(options, cancellationToken))
         {
             total++;
             bytes += candidate.SizeBytes;
             counts[candidate.Category]++;
-            dirs.Add(Path.GetDirectoryName(candidate.RelativePath) ?? string.Empty);
+
+            var dir = Path.GetDirectoryName(candidate.RelativePath);
+            if (!string.IsNullOrEmpty(dir))
+                dirs.Add(dir);
+
             if (total % 250 == 0)
                 progress?.Report(new ScanPreview(total, dirs.Count, bytes, counts));
         }
+
         var preview = new ScanPreview(total, dirs.Count, bytes, counts);
         progress?.Report(preview);
         return preview;

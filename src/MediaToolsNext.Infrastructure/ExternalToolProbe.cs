@@ -6,7 +6,11 @@ namespace MediaToolsNext.Infrastructure;
 public sealed class ExternalToolProbe : IExternalToolProbe
 {
     private static readonly string[] ToolNames = ["ffmpeg", "ffprobe", "magick", "qpdf"];
+
+    // ExecutionAndPublication ensures the Lazy is initialised once even if multiple
+    // threads race to read _statuses.Value for the first time.
     private readonly Lazy<IReadOnlyList<ToolStatus>> _statuses;
+
     // ConcurrentDictionary eliminates the race where two threads both call
     // ResolveExecutable for the same key before either has cached the result.
     private readonly ConcurrentDictionary<string, string?> _pathCache =
@@ -14,12 +18,13 @@ public sealed class ExternalToolProbe : IExternalToolProbe
 
     public ExternalToolProbe()
     {
-        _statuses = new Lazy<IReadOnlyList<ToolStatus>>(() =>
-            ToolNames.Select(name =>
+        _statuses = new Lazy<IReadOnlyList<ToolStatus>>(
+            () => ToolNames.Select(name =>
             {
                 var path = FindExecutable(name);
                 return new ToolStatus(name, path is not null, path, path is null ? "Not found on PATH" : null);
-            }).ToArray());
+            }).ToArray(),
+            LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     public IReadOnlyList<ToolStatus> GetStatuses() => _statuses.Value;
@@ -39,10 +44,12 @@ public sealed class ExternalToolProbe : IExternalToolProbe
         if (OperatingSystem.IsWindows() && commandName == "magick")
         {
             var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var found = Directory.Exists(programFiles)
-                ? Directory.EnumerateFiles(programFiles, "magick.exe", SearchOption.AllDirectories).FirstOrDefault()
-                : null;
-            if (found is not null) return found;
+            if (Directory.Exists(programFiles))
+            {
+                var found = Directory.EnumerateFiles(programFiles, "magick.exe", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+                if (found is not null) return found;
+            }
         }
 
         return null;

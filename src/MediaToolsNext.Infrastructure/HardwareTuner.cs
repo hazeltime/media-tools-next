@@ -6,17 +6,40 @@ public sealed class HardwareTuner : IHardwareTuner
 {
     public HardwareProfile Recommend(string sourcePath, string targetPath)
     {
-        var cpu = Environment.ProcessorCount;
-        var memory = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        var cpu        = Environment.ProcessorCount;
+        var memory     = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         var sourceDrive = GetDriveType(sourcePath);
         var targetDrive = GetDriveType(targetPath);
-        var sameRoot = string.Equals(Path.GetPathRoot(Path.GetFullPath(sourcePath)), Path.GetPathRoot(Path.GetFullPath(targetPath)), StringComparison.OrdinalIgnoreCase);
+
+        var sameRoot = string.Equals(
+            Path.GetPathRoot(Path.GetFullPath(sourcePath)),
+            Path.GetPathRoot(Path.GetFullPath(targetPath)),
+            StringComparison.OrdinalIgnoreCase);
+
+        // Reading and writing on the same physical drive creates contention:
+        // halve the worker count so we don't thrash the disk head.
         var ioPenalty = sameRoot ? 2 : 1;
+
+        // On machines with < 8 GB available RAM, each validator spawns external
+        // processes that are relatively memory-hungry, so cap the worker count.
+        // memoryCap = 2 when RAM is scarce, 0 otherwise — subtracted after
+        // the IO-penalty division so the cap is applied last.
         var memoryCap = memory > 0 && memory < 8L * 1024 * 1024 * 1024 ? 2 : 0;
+
+        // Clamp between 1 and 16. The minimum of 1 ensures we always make
+        // progress even on single-core / low-memory environments.
         var concurrency = Math.Clamp((cpu / ioPenalty) - memoryCap, 1, 16);
-        var buffer = sourceDrive == "Fixed" && targetDrive == "Fixed" ? 1024 * 1024 : 256 * 1024;
+
+        // Prefer large I/O buffers when both drives are fixed (SSD/HDD).
+        var buffer = sourceDrive == "Fixed" && targetDrive == "Fixed"
+            ? 1024 * 1024
+            : 256 * 1024;
+
+        // Give slower/single-core machines a shorter probe window so the scan
+        // doesn’t stall on a large corrupt video for too long.
         var probeSeconds = cpu >= 8 ? 120 : 60;
-        var rationale = $"{cpu} CPU threads, source={sourceDrive}, target={targetDrive}, sameDrive={sameRoot}";
+
+        var rationale = $"{cpu} CPU threads, source={sourceDrive}, target={targetDrive}, sameDrive={sameRoot}, memoryCap={memoryCap}, concurrency={concurrency}";
         return new HardwareProfile(cpu, memory, sourceDrive, targetDrive, concurrency, buffer, probeSeconds, rationale);
     }
 
@@ -25,7 +48,9 @@ public sealed class HardwareTuner : IHardwareTuner
         try
         {
             var root = Path.GetPathRoot(Path.GetFullPath(path));
-            return DriveInfo.GetDrives().FirstOrDefault(d => string.Equals(d.Name, root, StringComparison.OrdinalIgnoreCase))?.DriveType.ToString() ?? "Unknown";
+            return DriveInfo.GetDrives()
+                .FirstOrDefault(d => string.Equals(d.Name, root, StringComparison.OrdinalIgnoreCase))
+                ?.DriveType.ToString() ?? "Unknown";
         }
         catch { return "Unknown"; }
     }
