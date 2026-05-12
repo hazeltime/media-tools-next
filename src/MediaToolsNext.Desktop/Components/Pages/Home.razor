@@ -25,6 +25,14 @@
                 <option value="@ScanActionMode.CopySortedAndBackup">Copy sorted + backup</option>
             </select>
         </label>
+        <label>Profile
+            <select @bind="_profileName">
+                @foreach (var profile in ScanProfiles.All)
+                {
+                    <option value="@profile.Name">@profile.Name</option>
+                }
+            </select>
+        </label>
     </section>
 
     <section class="panel tools">
@@ -73,7 +81,8 @@
         _results.Clear();
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
         _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
-        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, true, true, true, true, _concurrency, _hardware.RecommendedProbeSeconds, db);
+        var profile = ScanProfiles.Get(_profileName);
+        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db);
         var progress = new Progress<ScanResultRecord>(record =>
         {
             _results.Add(record);
@@ -84,4 +93,5 @@
     }
 
     private HardwareProfile? _hardware;
+    private string _profileName = ScanProfiles.FastDryRun.Name;
 }

@@ -10,10 +10,11 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
 var source = args[0];
 var target = args[1];
 var backup = ValueAfter("--backup");
+var profile = ScanProfiles.Get(ValueAfter("--profile"));
 var db = ValueAfter("--db") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
 var tuning = new HardwareTuner().Recommend(source, target);
 var concurrency = int.TryParse(ValueAfter("--concurrency"), out var parsed) ? parsed : tuning.RecommendedConcurrency;
-var mode = args.Contains("--live") ? (backup is null ? ScanActionMode.CopySorted : ScanActionMode.CopySortedAndBackup) : ScanActionMode.DryRun;
+var mode = args.Contains("--live") ? (backup is null ? ScanActionMode.CopySorted : ScanActionMode.CopySortedAndBackup) : profile.DefaultActionMode;
 
 var tools = new ExternalToolProbe();
 Console.WriteLine("Tool status:");
@@ -21,7 +22,7 @@ foreach (var tool in tools.GetStatuses())
     Console.WriteLine($"- {tool.Name}: {(tool.IsAvailable ? tool.Path : "missing")}");
 
 Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={tuning.RecommendedProbeSeconds}, buffer={tuning.RecommendedCopyBufferBytes}, {tuning.Rationale}");
-var options = new ScanOptions(source, target, backup, mode, true, true, true, true, concurrency, tuning.RecommendedProbeSeconds, db);
+var options = new ScanOptions(source, target, backup, mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, concurrency, profile.MediaProbeSeconds, db);
 var pipeline = new ScannerPipeline(
     new FileDiscoverer(),
     [new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)],
