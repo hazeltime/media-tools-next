@@ -103,7 +103,12 @@ public sealed class ScannerPipeline(
             var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
             if (reusable is not null)
             {
-                return new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator, "cache_reused_previous_validation", "cached", null, null, DateTimeOffset.UtcNow);
+                // BUG FIX: cache hits must still be persisted under the current session
+                // so that GetSummaryAsync counts them and Results page shows them.
+                var cached = new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator,
+                    "cache_reused_previous_validation", "cached", null, null, DateTimeOffset.UtcNow);
+                await store.BatchSaveResultsAsync([cached], cancellationToken);
+                return cached;
             }
         }
 
@@ -141,8 +146,6 @@ public sealed class ScannerPipeline(
             }
             catch (Exception ex) when (!RetryPolicy.ShouldRetryIOException(ex))
             {
-                // Non-retryable exception from the file action — surface as an
-                // Error outcome rather than crashing the worker.
                 return new FileActionOutcome("error: " + ex.GetType().Name + ": " + ex.Message, null, null, null);
             }
         }
@@ -152,7 +155,6 @@ public sealed class ScannerPipeline(
     {
         if (options.MaxRuntimeSeconds is not int seconds || seconds <= 0)
             return null;
-
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(seconds));
         return cts;

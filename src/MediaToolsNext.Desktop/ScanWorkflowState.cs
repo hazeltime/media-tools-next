@@ -1,5 +1,6 @@
 using MediaToolsNext.Core;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace MediaToolsNext.Desktop;
 
@@ -9,20 +10,20 @@ public sealed class ScanWorkflowState
     public string TargetRoot { get; set; } = @"E:\_output_";
     public string? BackupRoot { get; set; } = @"G:\_backup_";
     public ScanActionMode Mode { get; set; } = ScanActionMode.DryRun;
-    public string ProfileName { get; set; } = ScanProfiles.FastDryRun.Name;
-    public ValidationDepth ValidationDepth { get; set; } = ValidationDepth.Fast;
+    public string ProfileName { get; set; } = ScanProfiles.StandardImages.Name;
+    public ValidationDepth ValidationDepth { get; set; } = ValidationDepth.Standard;
     public bool EnableImages { get; set; } = true;
     public bool EnableVideo { get; set; }
     public bool EnableAudio { get; set; }
     public bool EnableDocuments { get; set; }
     public int Concurrency { get; set; } = 4;
     public int ProbeSeconds { get; set; } = 10;
-    public int ToolTimeoutSeconds { get; set; } = 30;
+    public int ToolTimeoutSeconds { get; set; } = 60;
     public int MaxRuntimeSeconds { get; set; } = 30;
     public int MaxMatchedFiles { get; set; } = 10000;
     public int MaxMatchedMb { get; set; } = 10240;
-    public int MinFileKb { get; set; }
-    public int MaxFileMb { get; set; }
+    public int MinFileKb { get; set; } = 10;
+    public int MaxFileMb { get; set; } = 10;
     public bool ForceRescan { get; set; }
     public bool ConfirmedLiveMode { get; set; }
     public string CustomImageExtensionsText { get; set; } = string.Empty;
@@ -50,24 +51,60 @@ public sealed class ScanWorkflowState
     public CancellationToken ScanCancellationToken => scanCts?.Token ?? CancellationToken.None;
     public event Action? Changed;
 
+    // ── Elapsed / remaining ───────────────────────────────────────────────────
+    private readonly Stopwatch _runStopwatch = new();
+    public TimeSpan Elapsed => _runStopwatch.Elapsed;
+    public TimeSpan? Remaining
+    {
+        get
+        {
+            if (!IsScanning || MaxRuntimeSeconds <= 0) return null;
+            var rem = TimeSpan.FromSeconds(MaxRuntimeSeconds) - _runStopwatch.Elapsed;
+            return rem < TimeSpan.Zero ? TimeSpan.Zero : rem;
+        }
+    }
+
+    // ── Matched MB so far (live counter) ─────────────────────────────────────
+    private long _matchedBytes;
+    public long MatchedBytes => _matchedBytes;
+    public double MatchedMb => _matchedBytes / 1_048_576d;
+
+    public void AddMatchedBytes(long bytes) =>
+        System.Threading.Interlocked.Add(ref _matchedBytes, bytes);
+
+    // ── Searched vs FilteredOut counters ─────────────────────────────────────
+    // TotalSearched  = every file the discoverer touched
+    // FilteredOutSize    = dropped because of min/max file size
+    // FilteredOutPattern = dropped because include/exclude pattern
+    // FilteredOutFamily  = dropped because category not enabled
+    // Skipped (in _statusCounts) = reached pipeline but no validator (family disabled mid-scan edge-case)
+    private long _totalSearched;
+    private long _filteredOutSize;
+    private long _filteredOutPattern;
+    private long _filteredOutFamily;
+
+    public long TotalSearched => _totalSearched;
+    public long FilteredOutSize => _filteredOutSize;
+    public long FilteredOutPattern => _filteredOutPattern;
+    public long FilteredOutFamily => _filteredOutFamily;
+
+    public void IncrementSearched() => System.Threading.Interlocked.Increment(ref _totalSearched);
+    public void IncrementFilteredOutSize() => System.Threading.Interlocked.Increment(ref _filteredOutSize);
+    public void IncrementFilteredOutPattern() => System.Threading.Interlocked.Increment(ref _filteredOutPattern);
+    public void IncrementFilteredOutFamily() => System.Threading.Interlocked.Increment(ref _filteredOutFamily);
+
     private readonly object runGate = new();
     private CancellationTokenSource? scanCts;
 
     // ── Per-status counters ───────────────────────────────────────────────────
-    // Maintained in parallel with Results so the RunScan live-count tiles
-    // don't have to scan the full list on every UI tick.
     private readonly ConcurrentDictionary<ValidationStatus, int> _statusCounts = new();
 
-    /// <summary>Returns the current count for <paramref name="status"/>.</summary>
     public int GetStatusCount(ValidationStatus status) =>
         _statusCounts.GetValueOrDefault(status, 0);
 
-    /// <summary>Increments the counter for <paramref name="status"/> by 1.
-    /// Called from the UI thread after dequeuing a result record.</summary>
     public void IncrementStatusCount(ValidationStatus status) =>
         _statusCounts.AddOrUpdate(status, 1, (_, n) => n + 1);
 
-    /// <summary>Resets all counters to zero. Called at the start of each scan.</summary>
     public void ResetStatusCounts() => _statusCounts.Clear();
 
     // ── Identity helpers ──────────────────────────────────────────────────────
@@ -90,7 +127,6 @@ public sealed class ScanWorkflowState
             Preview = null;
             Message = "Preview is discovering matching files...";
         }
-
         NotifyChanged();
         return true;
     }
@@ -103,7 +139,6 @@ public sealed class ScanWorkflowState
             LastRunEndedLocal = DateTimeOffset.Now;
             Message = message;
         }
-
         NotifyChanged();
     }
 
@@ -121,11 +156,16 @@ public sealed class ScanWorkflowState
             scanCts = new CancellationTokenSource();
             Results.Clear();
             ResetStatusCounts();
+            System.Threading.Interlocked.Exchange(ref _matchedBytes, 0);
+            System.Threading.Interlocked.Exchange(ref _totalSearched, 0);
+            System.Threading.Interlocked.Exchange(ref _filteredOutSize, 0);
+            System.Threading.Interlocked.Exchange(ref _filteredOutPattern, 0);
+            System.Threading.Interlocked.Exchange(ref _filteredOutFamily, 0);
             Summary = null;
             Performance = new(TimeSpan.Zero, 0, 0);
             Message = "Scan is running...";
+            _runStopwatch.Restart();
         }
-
         NotifyChanged();
         return true;
     }
@@ -139,8 +179,8 @@ public sealed class ScanWorkflowState
             scanCts?.Dispose();
             scanCts = null;
             Message = message;
+            _runStopwatch.Stop();
         }
-
         NotifyChanged();
     }
 
@@ -169,7 +209,6 @@ public sealed class ScanWorkflowState
         var patterns = IncludePatterns.Count > 0 || ExcludePatterns.Count > 0
             ? $", patterns: include {IncludePatterns.Count}, exclude {ExcludePatterns.Count}"
             : string.Empty;
-
         return $"{Mode}, {DepthLabel(ValidationDepth)}, {families}; {limits}{sizeFilter}{patterns}; cache {(ForceRescan ? "off" : "on")}.";
     }
 
@@ -238,18 +277,18 @@ public sealed class ScanWorkflowState
 
     public static string DepthLabel(ValidationDepth depth) => depth switch
     {
-        ValidationDepth.Fast => "Quick header check",
+        ValidationDepth.Fast     => "Quick header check",
         ValidationDepth.Standard => "Medium metadata check",
-        ValidationDepth.Deep => "In-depth decode check",
-        _ => depth.ToString()
+        ValidationDepth.Deep     => "In-depth decode check",
+        _                        => depth.ToString()
     };
 
     public static string DepthExplanation(ValidationDepth depth) => depth switch
     {
-        ValidationDepth.Fast => "Checks file existence, non-zero size, and image header bytes.",
+        ValidationDepth.Fast     => "Checks file existence, non-zero size, and image header bytes.",
         ValidationDepth.Standard => "Adds ImageMagick identify -ping when available.",
-        ValidationDepth.Deep => "Asks ImageMagick to read the image without -ping for stronger corruption detection.",
-        _ => string.Empty
+        ValidationDepth.Deep     => "Asks ImageMagick to read the image without -ping for stronger corruption detection.",
+        _                        => string.Empty
     };
 
     public static bool IsRegexValid(string pattern)

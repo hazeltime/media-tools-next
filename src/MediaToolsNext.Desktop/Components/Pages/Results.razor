@@ -1,4 +1,5 @@
 @page "/results"
+@page "/results/{Tab}"
 @inject ScanWorkflowState State
 @inject FolderPickerService Picker
 @inject IReportExporter CsvExporter
@@ -8,9 +9,10 @@
     <header class="page-header">
         <p class="eyebrow">Review</p>
         <h1>Results</h1>
-        <p>Structured scan results. Use filters instead of reading the full log.</p>
+        <p>Structured scan results. Use filters and tabs to focus on what matters.</p>
     </header>
 
+    <!-- Scan metadata -->
     <section class="panel run-facts">
         <h2>Scan status</h2>
         @if (State.LastRunStartedLocal is null)
@@ -29,101 +31,240 @@
         }
     </section>
 
-    <section class="result-toolbar panel">
-        <label>Status
-            <select @bind="_statusFilter" @bind:after="RebuildCache">
-                <option value="">All statuses</option>
-                @foreach (var status in Enum.GetValues<ValidationStatus>()) { <option value="@status.ToString()">@status</option> }
-            </select>
-        </label>
-        <label>Search path or detail
-            <input @bind="_searchText" @bind:event="oninput" @bind:after="RebuildCache" placeholder="filename, folder, validator detail…" />
-        </label>
-        <label>Sort
-            <select @bind="State.ReportSort" @bind:after="RebuildCache">
-                <option value="status-path">Status, then path</option>
-                <option value="path">Path</option>
-                <option value="size-desc">Largest first</option>
-                <option value="time">Scan order</option>
-            </select>
-        </label>
-        <button disabled="@(!State.Results.Any())" @onclick="ExportAsync">Export @State.ReportFormat.ToUpperInvariant()</button>
-    </section>
-
-    <section class="summary-grid">
-        <div><strong>@State.Results.Count</strong><span>Total</span></div>
-        @foreach (var status in Enum.GetValues<ValidationStatus>())
-        {
-            <div><strong>@State.GetStatusCount(status)</strong><span>@status</span></div>
-        }
-    </section>
-
-    <section class="panel results-panel">
-        <div class="result-count">
-            <strong>@_filteredCount.ToString("N0")</strong>
-            <span>
-                @if (_filteredCount > 500)
-                {
-                    <text>matching rows — showing first 500.</text>
-                }
-                else
-                {
-                    <text>matching rows.</text>
-                }
-            </span>
+    <!-- Clickable summary tiles — click to filter -->
+    <section class="summary-tiles">
+        <!-- Input funnel -->
+        <div class="summary-tile-group">
+            <span class="summary-tile-group-label">Input</span>
+            <button class="summary-tile @(ActiveTab == "searched" ? "active" : "") searched"
+                    @onclick='() => SetTab("searched")'>
+                <strong>@State.TotalSearched.ToString("N0")</strong><span>Searched</span>
+            </button>
+            <button class="summary-tile @(ActiveTab == "filtered-size" ? "active" : "") filtered"
+                    @onclick='() => SetTab("filtered-size")'>
+                <strong>@State.FilteredOutSize.ToString("N0")</strong><span>Filtered · size</span>
+            </button>
+            <button class="summary-tile @(ActiveTab == "filtered-pattern" ? "active" : "") filtered"
+                    @onclick='() => SetTab("filtered-pattern")'>
+                <strong>@State.FilteredOutPattern.ToString("N0")</strong><span>Filtered · pattern</span>
+            </button>
+            <button class="summary-tile @(ActiveTab == "filtered-family" ? "active" : "") filtered"
+                    @onclick='() => SetTab("filtered-family")'>
+                <strong>@State.FilteredOutFamily.ToString("N0")</strong><span>Filtered · family</span>
+            </button>
+            <button class="summary-tile @(ActiveTab == "all" ? "active" : "") total"
+                    @onclick='() => SetTab("all")'>
+                <strong>@State.Results.Count.ToString("N0")</strong><span>Matched</span>
+            </button>
         </div>
-        <table class="results-table">
-            <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
-            <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
-            <tbody>
-                @foreach (var row in _visibleRows)
-                {
-                    <tr>
-                        <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
-                        <td>@row.Candidate.Category</td>
-                        <td title="@row.Candidate.FullPath"><span class="path-cell">@row.Candidate.RelativePath</span></td>
-                        <td>@FormatBytes(row.Candidate.SizeBytes)</td>
-                        <td>@row.Validator</td>
-                        <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
-                    </tr>
-                }
-                @if (_visibleRows.Count == 0)
-                {
-                    <tr><td colspan="6" class="empty-cell">No results match the current filter.</td></tr>
-                }
-            </tbody>
-        </table>
+        <!-- Outcomes -->
+        <div class="summary-tile-group">
+            <span class="summary-tile-group-label">Outcomes</span>
+            @foreach (var st in Enum.GetValues<ValidationStatus>())
+            {
+                var tabKey = st.ToString().ToLowerInvariant();
+                <button class="summary-tile @(ActiveTab == tabKey ? "active" : "") @tabKey"
+                        @onclick="() => SetTab(tabKey)">
+                    <strong>@State.GetStatusCount(st).ToString("N0")</strong>
+                    <span>@st</span>
+                </button>
+            }
+        </div>
     </section>
+
+    <!-- Tab content -->
+    @if (ActiveTab is "searched" or "filtered-size" or "filtered-pattern" or "filtered-family")
+    {
+        <section class="panel">
+            <h2>@TabTitle</h2>
+            <p class="muted">@TabDescription</p>
+            <!-- These counters come from the discoverer; no per-file records exist for filtered-out files. -->
+            <div class="summary-grid">
+                <div><strong>@FilteredCount.ToString("N0")</strong><span>@TabTitle</span></div>
+            </div>
+        </section>
+    }
+    else
+    {
+        <!-- Toolbar -->
+        <section class="result-toolbar panel">
+            <label>Search path or detail
+                <input @bind="_searchText" @bind:event="oninput" @bind:after="RebuildCache" placeholder="filename, folder, validator detail…" />
+            </label>
+            <label>Sort
+                <select @bind="State.ReportSort" @bind:after="RebuildCache">
+                    <option value="status-path">Status, then path</option>
+                    <option value="path">Path</option>
+                    <option value="size-desc">Largest first</option>
+                    <option value="time">Scan order</option>
+                </select>
+            </label>
+            <button disabled="@(!State.Results.Any())" @onclick="ExportAsync">Export @State.ReportFormat.ToUpperInvariant()</button>
+        </section>
+
+        <!-- Context actions per tab -->
+        @if (ActiveTab == "corrupt")
+        {
+            <section class="panel context-actions">
+                <h2>Corrupt files — actions</h2>
+                <div class="action-bar">
+                    <button class="secondary" @onclick="OpenCorruptFolder">Open output folder</button>
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Corrupt)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="CopyCorruptPaths">Copy paths to clipboard</button>
+                </div>
+                <p class="muted" style="margin-top:0.5rem">Corrupt files failed at least one validator check. Inspect the Detail column for the specific failure reason.</p>
+            </section>
+        }
+        else if (ActiveTab == "valid")
+        {
+            <section class="panel context-actions">
+                <h2>Valid files — actions</h2>
+                <div class="action-bar">
+                    <button class="secondary" @onclick="OpenValidFolder">Open output folder</button>
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Valid)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="CopyValidPaths">Copy paths to clipboard</button>
+                </div>
+            </section>
+        }
+        else if (ActiveTab == "unknown")
+        {
+            <section class="panel context-actions">
+                <h2>Unknown files — actions</h2>
+                <div class="action-bar">
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Unknown)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="CopyUnknownPaths">Copy paths to clipboard</button>
+                </div>
+                <p class="muted" style="margin-top:0.5rem">Unknown means the validator ran but could not determine validity — typically truncated or partially-written files, or validator returned no decisive result.</p>
+            </section>
+        }
+        else if (ActiveTab == "error")
+        {
+            <section class="panel context-actions">
+                <h2>Error files — actions</h2>
+                <div class="action-bar">
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Error)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="CopyErrorPaths">Copy paths to clipboard</button>
+                </div>
+                <p class="muted" style="margin-top:0.5rem">Error means the validator itself threw an exception (I/O error, tool crash, timeout). The file may or may not be corrupt — retry with Force rescan enabled.</p>
+            </section>
+        }
+        else if (ActiveTab == "skipped")
+        {
+            <section class="panel context-actions">
+                <h2>Skipped files</h2>
+                <p class="muted">Skipped means the file reached the pipeline but had no validator assigned — typically access-denied stubs or a file category that was disabled after the scan started.</p>
+            </section>
+        }
+
+        <!-- Results table -->
+        <section class="panel results-panel">
+            <div class="result-count">
+                <strong>@_filteredCount.ToString("N0")</strong>
+                <span>
+                    @if (_filteredCount > 500) { <text>matching rows — showing first 500.</text> }
+                    else { <text>matching rows.</text> }
+                </span>
+            </div>
+            <table class="results-table">
+                <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
+                <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _visibleRows)
+                    {
+                        <tr>
+                            <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
+                            <td>@row.Candidate.Category</td>
+                            <td title="@row.Candidate.FullPath"><span class="path-cell">@row.Candidate.RelativePath</span></td>
+                            <td>@FormatBytes(row.Candidate.SizeBytes)</td>
+                            <td>@row.Validator</td>
+                            <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
+                        </tr>
+                    }
+                    @if (_visibleRows.Count == 0)
+                    {
+                        <tr><td colspan="6" class="empty-cell">No results match the current filter.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
 </div>
 
 @code {
-    private string _statusFilter = string.Empty;
-    private string _searchText   = string.Empty;
+    [Parameter] public string? Tab { get; set; }
 
-    // Cached filtered/visible rows — rebuilt only when data or filters change,
-    // not on every Blazor render cycle.
+    private string ActiveTab = "all";
+    private string _searchText = string.Empty;
     private List<ScanResultRecord> _visibleRows  = [];
     private int                    _filteredCount = 0;
 
+    private string TabTitle => ActiveTab switch
+    {
+        "searched"         => "Searched",
+        "filtered-size"    => "Filtered out · size",
+        "filtered-pattern" => "Filtered out · pattern",
+        "filtered-family"  => "Filtered out · family",
+        _                  => ActiveTab
+    };
+
+    private string TabDescription => ActiveTab switch
+    {
+        "searched"         => "Total files the discoverer inspected before applying any filter.",
+        "filtered-size"    => "Files dropped because they were smaller than the minimum or larger than the maximum file size configured on the Media page.",
+        "filtered-pattern" => "Files dropped because their filename did not match an include pattern, or matched an exclude pattern.",
+        "filtered-family"  => "Files dropped because their extension belongs to a media family that was not enabled.",
+        _                  => string.Empty
+    };
+
+    private long FilteredCount => ActiveTab switch
+    {
+        "searched"         => State.TotalSearched,
+        "filtered-size"    => State.FilteredOutSize,
+        "filtered-pattern" => State.FilteredOutPattern,
+        "filtered-family"  => State.FilteredOutFamily,
+        _                  => 0
+    };
+
     protected override void OnInitialized()
     {
+        ActiveTab = string.IsNullOrWhiteSpace(Tab) ? "all" : Tab.ToLowerInvariant();
         State.Changed += OnStateChanged;
+        RebuildCache();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(Tab))
+            ActiveTab = Tab.ToLowerInvariant();
         RebuildCache();
     }
 
     public void Dispose() => State.Changed -= OnStateChanged;
 
-    private void OnStateChanged()
-    {
-        InvokeAsync(() =>
-        {
-            RebuildCache();
-            StateHasChanged();
-        });
-    }
+    private void SetTab(string tab) { ActiveTab = tab; RebuildCache(); }
+
+    private void OnStateChanged() => InvokeAsync(() => { RebuildCache(); StateHasChanged(); });
 
     private void RebuildCache()
     {
+        // For filter-only tabs there's no per-row data; skip table rebuild.
+        if (ActiveTab is "searched" or "filtered-size" or "filtered-pattern" or "filtered-family")
+        {
+            _filteredCount = 0;
+            _visibleRows   = [];
+            return;
+        }
+
+        ValidationStatus? statusFilter = ActiveTab switch
+        {
+            "valid"   => ValidationStatus.Valid,
+            "corrupt" => ValidationStatus.Corrupt,
+            "unknown" => ValidationStatus.Unknown,
+            "error"   => ValidationStatus.Error,
+            "skipped" => ValidationStatus.Skipped,
+            _         => (ValidationStatus?)null
+        };
+
         var sorted = State.ReportSort switch
         {
             "path"        => State.Results.OrderBy(x => x.Candidate.RelativePath),
@@ -132,37 +273,78 @@
             _             => (IEnumerable<ScanResultRecord>)State.Results
         };
 
-        var filtered = sorted.Where(MatchesFilter).ToList();
+        var filtered = sorted.Where(r =>
+        {
+            if (statusFilter.HasValue && r.Status != statusFilter.Value) return false;
+            if (string.IsNullOrWhiteSpace(_searchText)) return true;
+            return r.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+                || r.Candidate.FullPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+                || (r.Detail?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
+                || r.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+
         _filteredCount = filtered.Count;
         _visibleRows   = filtered.Take(500).ToList();
     }
 
-    private bool MatchesFilter(ScanResultRecord row)
+    // ── Clipboard helpers ─────────────────────────────────────────────────────
+    private Task CopyCorruptPaths()  => CopyPathsForStatus(ValidationStatus.Corrupt);
+    private Task CopyValidPaths()    => CopyPathsForStatus(ValidationStatus.Valid);
+    private Task CopyUnknownPaths()  => CopyPathsForStatus(ValidationStatus.Unknown);
+    private Task CopyErrorPaths()    => CopyPathsForStatus(ValidationStatus.Error);
+
+    private async Task CopyPathsForStatus(ValidationStatus status)
     {
-        if (!string.IsNullOrWhiteSpace(_statusFilter)
-            && !string.Equals(row.Status.ToString(), _statusFilter, StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (string.IsNullOrWhiteSpace(_searchText)) return true;
-        return row.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            || row.Candidate.FullPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            || (row.Detail?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
-            || row.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
+        var paths = State.Results
+            .Where(r => r.Status == status)
+            .Select(r => r.Candidate.FullPath);
+        try
+        {
+            await Microsoft.Maui.ApplicationModel.DataTransfer.Clipboard.Default
+                .SetTextAsync(string.Join(Environment.NewLine, paths));
+            State.Message = $"Copied {State.GetStatusCount(status):N0} {status} paths to clipboard.";
+        }
+        catch { State.Message = "Clipboard not available in this context."; }
+        State.NotifyChanged();
     }
 
-    private async Task ExportAsync()
+    // ── Folder open helpers ───────────────────────────────────────────────────
+    private void OpenValidFolder()   => OpenFolder(Path.Combine(State.TargetRoot, "valid"));
+    private void OpenCorruptFolder() => OpenFolder(Path.Combine(State.TargetRoot, "corrupt"));
+
+    private static void OpenFolder(string path)
     {
+        if (!Directory.Exists(path)) return;
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true }); }
+        catch { /* ignore */ }
+    }
+
+    // ── Export helpers ────────────────────────────────────────────────────────
+    private async Task ExportAsync() => await ExportFilteredAsync(null);
+
+    private async Task ExportFilteredAsync(ValidationStatus? status)
+    {
+        var source = status.HasValue
+            ? State.Results.Where(r => r.Status == status.Value)
+            : (IEnumerable<ScanResultRecord>)State.Results;
+
         var rows = State.ReportSort switch
         {
-            "path"        => State.Results.OrderBy(x => x.Candidate.RelativePath),
-            "size-desc"   => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
-            "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
-            _             => (IEnumerable<ScanResultRecord>)State.Results
+            "path"        => source.OrderBy(x => x.Candidate.RelativePath),
+            "size-desc"   => source.OrderByDescending(x => x.Candidate.SizeBytes),
+            "status-path" => source.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
+            _             => source
         };
-        var path = await Picker.PickCsvSavePathAsync("media-tools-results." + State.ReportFormat);
+
+        var defaultName = status.HasValue
+            ? $"media-tools-{status.Value.ToString().ToLowerInvariant()}.{State.ReportFormat}"
+            : $"media-tools-results.{State.ReportFormat}";
+        var path = await Picker.PickCsvSavePathAsync(defaultName);
         if (string.IsNullOrWhiteSpace(path)) return;
         if (State.ReportFormat == "csv") await CsvExporter.ExportCsvAsync(rows, path, CancellationToken.None);
         else await File.WriteAllLinesAsync(path, rows.Select(x => $"{x.Status}\t{x.Candidate.Category}\t{x.Candidate.RelativePath}\t{x.Detail}"));
-        State.Message = "Exported results: " + path;
+        State.Message = "Exported: " + path;
+        State.NotifyChanged();
     }
 
     private static string FormatBytes(long bytes)

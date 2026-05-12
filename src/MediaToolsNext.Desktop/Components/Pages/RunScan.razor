@@ -41,11 +41,38 @@
     @if (State.Results.Any() || State.IsScanning)
     {
         <section class="panel live-counts-panel">
+            <!-- Row 1: pipeline input funnel -->
+            <p class="live-counts-group-label">Input</p>
             <div class="live-counts">
-                <div class="live-count total">
-                    <span class="live-count-value">@State.Results.Count.ToString("N0")</span>
-                    <span class="live-count-label">Scanned</span>
+                <div class="live-count searched" title="Every file the discoverer touched before any filter.">
+                    <span class="live-count-value">@State.TotalSearched.ToString("N0")</span>
+                    <span class="live-count-label">Searched</span>
                 </div>
+                <div class="live-count filtered" title="Dropped by min/max file size filter.">
+                    <span class="live-count-value">@State.FilteredOutSize.ToString("N0")</span>
+                    <span class="live-count-label">Filtered · size</span>
+                </div>
+                <div class="live-count filtered" title="Dropped by include/exclude filename pattern.">
+                    <span class="live-count-value">@State.FilteredOutPattern.ToString("N0")</span>
+                    <span class="live-count-label">Filtered · pattern</span>
+                </div>
+                <div class="live-count filtered" title="Dropped because file family not enabled.">
+                    <span class="live-count-value">@State.FilteredOutFamily.ToString("N0")</span>
+                    <span class="live-count-label">Filtered · family</span>
+                </div>
+                <div class="live-count total" title="Files that passed all discoverer filters and entered the validation pipeline.">
+                    <span class="live-count-value">@State.Results.Count.ToString("N0")</span>
+                    <span class="live-count-label">Matched</span>
+                </div>
+                <div class="live-count total" title="Total size of all matched files so far.">
+                    <span class="live-count-value">@State.MatchedMb.ToString("N1")</span>
+                    <span class="live-count-label">Matched MB</span>
+                </div>
+            </div>
+
+            <!-- Row 2: validation outcomes -->
+            <p class="live-counts-group-label" style="margin-top:0.75rem">Outcomes</p>
+            <div class="live-counts">
                 <div class="live-count valid">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Valid).ToString("N0")</span>
                     <span class="live-count-label">Valid</span>
@@ -62,7 +89,7 @@
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Error).ToString("N0")</span>
                     <span class="live-count-label">Error</span>
                 </div>
-                <div class="live-count skipped">
+                <div class="live-count skipped" title="Reached pipeline but had no matching validator (category disabled after start, or access-denied stub).">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Skipped).ToString("N0")</span>
                     <span class="live-count-label">Skipped</span>
                 </div>
@@ -70,6 +97,22 @@
                     <span class="live-count-value">@State.Performance.FilesPerSecond.ToString("N1")</span>
                     <span class="live-count-label">Files/s</span>
                 </div>
+            </div>
+
+            <!-- Row 3: time -->
+            <p class="live-counts-group-label" style="margin-top:0.75rem">Time</p>
+            <div class="live-counts">
+                <div class="live-count perf">
+                    <span class="live-count-value">@FormatElapsed(State.Elapsed)</span>
+                    <span class="live-count-label">Elapsed</span>
+                </div>
+                @if (State.Remaining.HasValue)
+                {
+                    <div class="live-count perf">
+                        <span class="live-count-value">@FormatElapsed(State.Remaining.Value)</span>
+                        <span class="live-count-label">Remaining</span>
+                    </div>
+                }
             </div>
         </section>
     }
@@ -127,24 +170,31 @@
             : "No active job. Preview or scan can be started.";
 
     private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+    private static string FormatElapsed(TimeSpan t) => t.TotalHours >= 1
+        ? $"{(int)t.TotalHours}h {t.Minutes:D2}m {t.Seconds:D2}s"
+        : $"{t.Minutes:D2}m {t.Seconds:D2}s";
 
-    protected override void OnInitialized() => State.Changed += OnStateChanged;
+    protected override void OnInitialized()
+    {
+        State.Changed += OnStateChanged;
+        // Timer to keep elapsed/remaining updating while scanning even if no new files arrive
+        _clockTimer = new System.Threading.Timer(_ =>
+        {
+            if (State.IsScanning) InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+    }
+
     public void Dispose()
     {
         State.Changed -= OnStateChanged;
         _throttleTimer?.Dispose();
+        _clockTimer?.Dispose();
     }
 
-    // ── Throttled UI updates ──────────────────────────────────────────────────
-    // Progress<T> fires on every file from worker threads. Calling
-    // StateHasChanged on every file causes a re-render storm that makes the
-    // UI lag badly at high scan rates.
-    //
-    // Solution: accumulate incoming records in a lock-free queue; a timer
-    // flushes the queue and triggers a single StateHasChanged at most 4×/s.
+    private System.Threading.Timer? _clockTimer;
     private readonly System.Collections.Concurrent.ConcurrentQueue<ScanResultRecord> _pending = new();
     private System.Threading.Timer? _throttleTimer;
-    private const int ThrottleMs = 250; // max 4 UI updates per second
+    private const int ThrottleMs = 250;
 
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
@@ -154,7 +204,6 @@
         _throttleTimer = new System.Threading.Timer(_ =>
         {
             if (_pending.IsEmpty) return;
-            // Drain queue onto State.Results on the UI thread.
             InvokeAsync(() =>
             {
                 while (_pending.TryDequeue(out var r))
@@ -162,11 +211,11 @@
                     State.Results.Add(r);
                     State.Performance = tracker.Add(r);
                     State.IncrementStatusCount(r.Status);
+                    State.AddMatchedBytes(r.Candidate.SizeBytes);
                 }
                 StateHasChanged();
             });
         }, null, ThrottleMs, ThrottleMs);
-
         return new Progress<ScanResultRecord>(r => _pending.Enqueue(r));
     }
 
@@ -179,6 +228,7 @@
             State.Results.Add(r);
             State.Performance = tracker.Add(r);
             State.IncrementStatusCount(r.Status);
+            State.AddMatchedBytes(r.Candidate.SizeBytes);
         }
     }
 
@@ -191,7 +241,9 @@
         {
             State.Preview = await PreviewService.PreviewAsync(State.BuildOptions(limit), CancellationToken.None);
             State.LastCompletionReason = limit.StopReason ?? "Source exhausted.";
-            var message = State.Preview.TotalFiles == 0 ? "Preview complete: no matching files found." : $"Preview complete: {State.Preview.TotalFiles:N0} matching files found.";
+            var message = State.Preview.TotalFiles == 0
+                ? "Preview complete: no matching files found."
+                : $"Preview complete: {State.Preview.TotalFiles:N0} matching files found.";
             State.FinishPreview(message);
         }
         catch (Exception ex) { State.LastCompletionReason = "Preview failed."; State.FinishPreview("Preview failed: " + ex.Message); }
@@ -204,7 +256,6 @@
         if (!State.TryStartScan()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
         var limit   = new ScanLimitState();
         var tracker = new ScanPerformanceTracker();
-        State.ResetStatusCounts();
         var progress = BuildThrottledProgress(tracker);
         try
         {
@@ -213,8 +264,8 @@
             FlushPending(tracker);
             State.FinishScan("Scan complete.");
         }
-        catch (OperationCanceledException) { State.LastCompletionReason = "Cancelled.";    FlushPending(tracker); State.FinishScan("Scan cancelled."); }
-        catch (Exception ex)               { State.LastCompletionReason = "Scan failed.";  FlushPending(tracker); State.FinishScan("Scan failed: " + ex.Message); }
+        catch (OperationCanceledException) { State.LastCompletionReason = "Cancelled.";   FlushPending(tracker); State.FinishScan("Scan cancelled."); }
+        catch (Exception ex)               { State.LastCompletionReason = "Scan failed."; FlushPending(tracker); State.FinishScan("Scan failed: " + ex.Message); }
         finally
         {
             if (State.IsScanning) { FlushPending(tracker); State.FinishScan(State.Message ?? "Scan stopped."); }

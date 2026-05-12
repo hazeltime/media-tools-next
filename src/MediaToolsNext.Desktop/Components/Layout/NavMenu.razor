@@ -26,7 +26,22 @@
         </div>
         <div class="nav-section">Review</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="results"><span class="bi bi-table-nav-menu" aria-hidden="true"></span> Results</NavLink>
+            <NavLink class="nav-link" href="results" Match="NavLinkMatch.All"><span class="bi bi-table-nav-menu" aria-hidden="true"></span> Results · All</NavLink>
+        </div>
+        <div class="nav-item px-3 nav-sub">
+            <NavLink class="nav-link nav-link-sub" href="results/valid"><span class="status-dot valid"></span> Valid</NavLink>
+        </div>
+        <div class="nav-item px-3 nav-sub">
+            <NavLink class="nav-link nav-link-sub" href="results/corrupt"><span class="status-dot corrupt"></span> Corrupt</NavLink>
+        </div>
+        <div class="nav-item px-3 nav-sub">
+            <NavLink class="nav-link nav-link-sub" href="results/unknown"><span class="status-dot unknown"></span> Unknown</NavLink>
+        </div>
+        <div class="nav-item px-3 nav-sub">
+            <NavLink class="nav-link nav-link-sub" href="results/error"><span class="status-dot error"></span> Error</NavLink>
+        </div>
+        <div class="nav-item px-3 nav-sub">
+            <NavLink class="nav-link nav-link-sub" href="results/skipped"><span class="status-dot skipped"></span> Skipped</NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="history"><span class="bi bi-clock-nav-menu" aria-hidden="true"></span> Saved scans</NavLink>
