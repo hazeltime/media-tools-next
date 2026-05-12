@@ -1,4 +1,5 @@
 using MediaToolsNext.Core;
+using System.Collections.Concurrent;
 
 namespace MediaToolsNext.Desktop;
 
@@ -52,6 +53,24 @@ public sealed class ScanWorkflowState
     private readonly object runGate = new();
     private CancellationTokenSource? scanCts;
 
+    // ── Per-status counters ───────────────────────────────────────────────────
+    // Maintained in parallel with Results so the RunScan live-count tiles
+    // don't have to scan the full list on every UI tick.
+    private readonly ConcurrentDictionary<ValidationStatus, int> _statusCounts = new();
+
+    /// <summary>Returns the current count for <paramref name="status"/>.</summary>
+    public int GetStatusCount(ValidationStatus status) =>
+        _statusCounts.GetValueOrDefault(status, 0);
+
+    /// <summary>Increments the counter for <paramref name="status"/> by 1.
+    /// Called from the UI thread after dequeuing a result record.</summary>
+    public void IncrementStatusCount(ValidationStatus status) =>
+        _statusCounts.AddOrUpdate(status, 1, (_, n) => n + 1);
+
+    /// <summary>Resets all counters to zero. Called at the start of each scan.</summary>
+    public void ResetStatusCounts() => _statusCounts.Clear();
+
+    // ── Identity helpers ──────────────────────────────────────────────────────
     public bool IsImageOnly => EnableImages && !EnableVideo && !EnableAudio && !EnableDocuments;
     public bool AnyFamilyEnabled => EnableImages || EnableVideo || EnableAudio || EnableDocuments;
     public IReadOnlySet<string> CustomImageExtensions => ParseExtensions(CustomImageExtensionsText);
@@ -101,6 +120,7 @@ public sealed class ScanWorkflowState
             scanCts?.Dispose();
             scanCts = new CancellationTokenSource();
             Results.Clear();
+            ResetStatusCounts();
             Summary = null;
             Performance = new(TimeSpan.Zero, 0, 0);
             Message = "Scan is running...";
@@ -172,15 +192,15 @@ public sealed class ScanWorkflowState
             SourcePath,
             TargetRoot,
             string.IsNullOrWhiteSpace(BackupRoot) ? null : BackupRoot,
-            Mode,
+            ActionMode: Mode,
             EnableImages,
             EnableVideo,
             EnableAudio,
             EnableDocuments,
-            Concurrency,
-            ProbeSeconds,
-            db,
-            ValidationDepth,
+            MaxConcurrency: Concurrency,
+            MediaProbeSeconds: ProbeSeconds,
+            DatabasePath: db,
+            ValidationDepth: ValidationDepth,
             ExternalToolTimeoutSeconds: ToolTimeoutSeconds,
             MaxMatchedFiles: ZeroAsNull(MaxMatchedFiles),
             MaxMatchedBytes: MbAsBytes(MaxMatchedMb),
