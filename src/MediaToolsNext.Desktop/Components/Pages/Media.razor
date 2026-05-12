@@ -68,9 +68,10 @@
 @code {
     private static string Label(ScanProfile profile) => profile.Name switch
     {
-        "quick-images" => "Quick image check",
+        "quick-images"   => "Quick image check",
         "standard-images" => "Medium image check",
-        "deep-images" => "In-depth image check",
-        _ => profile.Name
+        "deep-images"    => "In-depth image check",
+        "all-media"      => "All media",
+        _                => profile.Name
     };
 }
