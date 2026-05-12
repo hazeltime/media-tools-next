@@ -50,6 +50,13 @@
         <strong>Unknown</strong><span>@_summary?.Unknown</span>
         <strong>Errors</strong><span>@_summary?.Errors</span>
     </section>
+    <section class="stats">
+        <strong>Elapsed</strong><span>@_performance.Elapsed.ToString("hh\\:mm\\:ss")</span>
+        <strong>Files/s</strong><span>@_performance.FilesPerSecond.ToString("N1")</span>
+        <strong>MB/s</strong><span>@_performance.MegabytesPerSecond.ToString("N1")</span>
+        <strong>Processed</strong><span>@_performance.FilesProcessed</span>
+        <strong>MB</strong><span>@(_performance.BytesProcessed / 1048576d).ToString("N1")</span>
+    </section>
 
     <section class="panel results">
         <table>
@@ -72,6 +79,7 @@
     private ScanActionMode _mode = ScanActionMode.DryRun;
     private bool _running;
     private ScanSummary? _summary;
+    private ScanPerformance _performance = new(TimeSpan.Zero, 0, 0);
     private readonly List<ScanResultRecord> _results = [];
 
     private async Task RunAsync()
@@ -79,6 +87,7 @@
         _running = true;
         _summary = null;
         _results.Clear();
+        var metrics = new ScanPerformanceTracker();
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
         _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
         var profile = ScanProfiles.Get(_profileName);
@@ -86,6 +95,7 @@
         var progress = new Progress<ScanResultRecord>(record =>
         {
             _results.Add(record);
+            _performance = metrics.Add(record);
             InvokeAsync(StateHasChanged);
         });
         try { _summary = await Pipeline.RunAsync(options, progress, CancellationToken.None); }

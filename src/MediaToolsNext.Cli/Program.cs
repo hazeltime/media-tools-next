@@ -29,7 +29,12 @@ var pipeline = new ScannerPipeline(
     new FileActionService(),
     new SqliteScanStore(db));
 
-var progress = new Progress<ScanResultRecord>(r => Console.WriteLine($"{r.Status,-7} {r.Candidate.Category,-8} {r.Candidate.RelativePath}"));
+var metrics = new ScanPerformanceTracker();
+var progress = new Progress<ScanResultRecord>(r =>
+{
+    var current = metrics.Add(r);
+    Console.WriteLine($"{r.Status,-7} {r.Candidate.Category,-8} {current.FilesPerSecond:N1} files/s {current.MegabytesPerSecond:N1} MB/s {r.Candidate.RelativePath}");
+});
 var summary = await pipeline.RunAsync(options, progress, CancellationToken.None);
 Console.WriteLine($"Done. total={summary.Total} valid={summary.Valid} corrupt={summary.Corrupt} unknown={summary.Unknown} errors={summary.Errors}");
 
