@@ -12,7 +12,8 @@ public sealed record ScanOptions(
     int MaxConcurrency,
     int MediaProbeSeconds,
     string DatabasePath,
-    ValidationDepth ValidationDepth = ValidationDepth.Standard)
+    ValidationDepth ValidationDepth = ValidationDepth.Standard,
+    int MaxRetries = 1)
 {
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
         new(
