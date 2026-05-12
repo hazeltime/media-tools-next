@@ -8,6 +8,7 @@ public static class MediaToolsServices
     public static IServiceCollection AddMediaToolsNext(this IServiceCollection services, Func<IServiceProvider, string> databasePath)
     {
         services.AddSingleton<IExternalToolProbe, ExternalToolProbe>();
+        services.AddSingleton<IHardwareTuner, HardwareTuner>();
         services.AddSingleton<IFileDiscoverer, FileDiscoverer>();
         services.AddSingleton<IFileActionService, FileActionService>();
         services.AddSingleton<IMediaValidator, ImageValidator>();
@@ -19,4 +20,3 @@ public static class MediaToolsServices
         return services;
     }
 }
-

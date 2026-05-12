@@ -36,3 +36,7 @@ public interface IScannerPipeline
     Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken);
 }
 
+public interface IHardwareTuner
+{
+    HardwareProfile Recommend(string sourcePath, string targetPath);
+}

@@ -2,6 +2,7 @@
 @using MediaToolsNext.Core
 @inject IScannerPipeline Pipeline
 @inject IExternalToolProbe ToolProbe
+@inject IHardwareTuner HardwareTuner
 
 <div class="scanner-shell">
     <header>
@@ -32,6 +33,7 @@
             <span class="tool @(tool.IsAvailable ? "ok" : "missing")">@tool.Name</span>
         }
     </section>
+    <section class="panel">Auto tuning: @_hardware?.Rationale; recommended concurrency @_hardware?.RecommendedConcurrency.</section>
 
     <section class="stats">
         <strong>Total</strong><span>@_summary?.Total</span>
@@ -70,7 +72,8 @@
         _summary = null;
         _results.Clear();
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
-        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, true, true, true, true, _concurrency, 120, db);
+        _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
+        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, true, true, true, true, _concurrency, _hardware.RecommendedProbeSeconds, db);
         var progress = new Progress<ScanResultRecord>(record =>
         {
             _results.Add(record);
@@ -79,5 +82,6 @@
         try { _summary = await Pipeline.RunAsync(options, progress, CancellationToken.None); }
         finally { _running = false; }
     }
-}
 
+    private HardwareProfile? _hardware;
+}
