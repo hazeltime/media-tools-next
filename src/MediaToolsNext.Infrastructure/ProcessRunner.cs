@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 
@@ -42,7 +43,18 @@ internal sealed class ProcessRunner
                 lock (stderrLock) stderr.AppendLine(e.Data);
         };
 
-        process.Start();
+        // BUG FIX: Process.Start() throws Win32Exception if the executable is not
+        // found or not executable. Catch it here and return a descriptive timed-out
+        // result so callers see a clean error outcome rather than an unhandled crash.
+        try
+        {
+            process.Start();
+        }
+        catch (Win32Exception ex)
+        {
+            return new ProcessResult(-1, string.Empty, $"tool_not_found: {fileName} — {ex.Message}", false);
+        }
+
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 

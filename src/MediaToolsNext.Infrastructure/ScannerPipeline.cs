@@ -84,8 +84,10 @@ public sealed class ScannerPipeline(
             await producer;
             await Task.WhenAll(workers);
         }
-        catch (OperationCanceledException) when (runToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (runToken.IsCancellationRequested)
         {
+            // Covers both user cancel and runtime timeout. Always update LimitState
+            // so the UI shows the correct stop reason regardless of which token fired.
             options.LimitState?.StopAfterWorkStarted(RuntimeStopReason(options));
         }
 
@@ -147,8 +149,13 @@ public sealed class ScannerPipeline(
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken);
             }
-            catch (Exception ex) when (!RetryPolicy.ShouldRetryIOException(ex))
+            catch (Exception ex)
             {
+                // BUG FIX: previously only non-retryable exceptions were caught here.
+                // If ShouldRetryIOException==true but attempt>=MaxRetries the exception
+                // would escape the loop uncaught, propagating out of the worker task and
+                // crashing the scan session. Now we always land here after retries are
+                // exhausted — or immediately for non-retryable exceptions.
                 return new FileActionOutcome("error: " + ex.GetType().Name + ": " + ex.Message, null, null, null);
             }
         }

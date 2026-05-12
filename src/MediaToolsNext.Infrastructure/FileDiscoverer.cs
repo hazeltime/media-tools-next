@@ -60,11 +60,19 @@ public sealed class FileDiscoverer : IFileDiscoverer
             {
                 if (accessError is not null)
                 {
+                    // BUG FIX: previously access-denied files with an unknown extension
+                    // were forced to MediaCategory.Image, causing them to flow through
+                    // ImageValidator and produce misleading results. Use Unknown so the
+                    // pipeline records them as Error/Skipped with no validator noise.
                     var ext2 = Path.GetExtension(file).ToLowerInvariant();
                     var cat2 = GetCategory(file, ext2, options, customImageRegex);
-                    var stub = new FileCandidate(file, Path.GetRelativePath(source, file), ext2,
-                        cat2 == MediaCategory.Unknown ? MediaCategory.Image : cat2,
-                        0L, DateTimeOffset.MinValue);
+                    var stub = new FileCandidate(
+                        file,
+                        Path.GetRelativePath(source, file),
+                        ext2,
+                        cat2 == MediaCategory.Unknown ? MediaCategory.Unknown : cat2,
+                        0L,
+                        DateTimeOffset.MinValue);
                     yield return stub;
                     continue;
                 }

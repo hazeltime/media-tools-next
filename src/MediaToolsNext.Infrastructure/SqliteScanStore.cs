@@ -5,6 +5,13 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class SqliteScanStore(string databasePath) : IScanStore
 {
+    // BUG FIX: use second-precision timestamp format for cache lookups.
+    // The full round-trip format ("O") includes sub-second precision that varies
+    // by filesystem (NTFS vs FAT32 vs exFAT), causing cache misses for files that
+    // were copied to a lower-precision filesystem and then re-scanned.
+    // Using "yyyy-MM-ddTHH:mm:ssZ" normalises all timestamps to whole seconds.
+    private const string TimestampFormat = "yyyy-MM-ddTHH:mm:ssZ";
+
     private string ConnectionString => new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
@@ -56,7 +63,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         command.Parameters.AddWithValue("$target", options.TargetRoot);
         command.Parameters.AddWithValue("$backup", (object?)options.BackupRoot ?? DBNull.Value);
         command.Parameters.AddWithValue("$mode", options.ActionMode.ToString());
-        command.Parameters.AddWithValue("$started", DateTimeOffset.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("$started", DateTimeOffset.UtcNow.ToString(TimestampFormat));
         await command.ExecuteNonQueryAsync(cancellationToken);
         return id;
     }
@@ -101,14 +108,14 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         command.Parameters.AddWithValue("$ext", result.Candidate.Extension);
         command.Parameters.AddWithValue("$category", result.Candidate.Category.ToString());
         command.Parameters.AddWithValue("$size", result.Candidate.SizeBytes);
-        command.Parameters.AddWithValue("$lastWrite", result.Candidate.LastWriteTimeUtc.ToString("O"));
+        command.Parameters.AddWithValue("$lastWrite", result.Candidate.LastWriteTimeUtc.ToString(TimestampFormat));
         command.Parameters.AddWithValue("$status", result.Status.ToString());
         command.Parameters.AddWithValue("$validator", result.Validator);
         command.Parameters.AddWithValue("$detail", (object?)result.Detail ?? DBNull.Value);
         command.Parameters.AddWithValue("$action", result.Action);
         command.Parameters.AddWithValue("$primary", (object?)result.PrimaryTargetPath ?? DBNull.Value);
         command.Parameters.AddWithValue("$backup", (object?)result.BackupTargetPath ?? DBNull.Value);
-        command.Parameters.AddWithValue("$timestamp", result.TimestampUtc.ToString("O"));
+        command.Parameters.AddWithValue("$timestamp", result.TimestampUtc.ToString(TimestampFormat));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -126,7 +133,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
             """;
         command.Parameters.AddWithValue("$full", candidate.FullPath);
         command.Parameters.AddWithValue("$size", candidate.SizeBytes);
-        command.Parameters.AddWithValue("$lastWrite", candidate.LastWriteTimeUtc.ToString("O"));
+        command.Parameters.AddWithValue("$lastWrite", candidate.LastWriteTimeUtc.ToString(TimestampFormat));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? ReadResult(reader) : null;
     }

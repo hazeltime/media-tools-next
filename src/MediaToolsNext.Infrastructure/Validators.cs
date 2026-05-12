@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using MediaToolsNext.Core;
 
 namespace MediaToolsNext.Infrastructure;
@@ -160,7 +161,10 @@ public sealed class DocumentValidator(IExternalToolProbe tools) : IMediaValidato
         try
         {
             await using var stream = File.Open(candidate.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var buf = new byte[Math.Min(ProbeBytes, candidate.SizeBytes)];
+            // BUG FIX: explicit (int) cast prevents potential OverflowException if
+            // ProbeBytes were ever changed to exceed int.MaxValue; also silences
+            // compiler ambiguity between Math.Min(int,long) overloads.
+            var buf = new byte[(int)Math.Min((long)ProbeBytes, candidate.SizeBytes)];
             var read = await stream.ReadAsync(buf, cancellationToken);
             return read > 0
                 ? new(candidate, ValidationStatus.Valid,   "read-probe", null, sw.Elapsed)

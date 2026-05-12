@@ -56,7 +56,18 @@ public sealed class FileActionService : IFileActionService
 
     private static string CombineOutputPath(string root, string statusFolder, string relativePath)
     {
-        var parts = relativePath.Split(
+        // BUG FIX: Path.Combine discards earlier segments when a later segment is
+        // rooted (absolute). Sanitize relativePath to prevent a rooted relative
+        // path from hijacking the output location — e.g. if source normalisation
+        // produces an absolute path as the relative segment.
+        var safeRelative = relativePath
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (Path.IsPathRooted(safeRelative))
+            throw new ArgumentException(
+                $"relativePath must not be an absolute path. Got: {relativePath}",
+                nameof(relativePath));
+
+        var parts = safeRelative.Split(
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
         return Path.Combine([root, statusFolder, .. parts]);
