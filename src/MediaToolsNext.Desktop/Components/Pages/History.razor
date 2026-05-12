@@ -24,7 +24,7 @@
                 {
                     <button class="session-row" @onclick="() => Open(session.SessionId)">
                         <strong>@session.StartedUtc.LocalDateTime.ToString("g")</strong>
-                        <span>@FormatMode(session.ActionMode) — @session.SourcePath</span>
+                        <span>@FormatMode(session.ActionMode.ToString()) — @session.SourcePath</span>
                     </button>
                 }
             </div>
@@ -62,9 +62,9 @@
 
     private static string FormatMode(string? mode) => mode switch
     {
-        "DryRun" => "Log only",
-        "CopySorted" => "Copy sorted",
-        "CopySortedAndBackup" => "Copy + backup",
-        _ => mode ?? "Unknown"
+        "DryRun"               => "Log only",
+        "CopySorted"           => "Copy sorted",
+        "CopySortedAndBackup"  => "Copy + backup",
+        _                      => mode ?? "Unknown"
     };
 }
