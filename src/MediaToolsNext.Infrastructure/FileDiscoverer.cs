@@ -60,6 +60,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
                 searchedFiles++;
                 scannedBytes += info.Exists ? info.Length : 0;
+
                 if (ShouldStopForRuntime() || ShouldStopBeforeNextMatch())
                     yield break;
                 if (!MatchesFileFilters(info, includePatterns, excludePatterns))
@@ -73,6 +74,10 @@ public sealed class FileDiscoverer : IFileDiscoverer
                     continue;
                 if (options.MaxCandidateBytes is long maxBytes && info.Length > maxBytes)
                     continue;
+
+                // Guard: stop before this file would push matchedBytes over the limit.
+                // Single consolidated check — avoids the duplicate logic that existed
+                // when this was also checked inside ShouldStopBeforeNextMatch.
                 if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + info.Length > maxMatchedBytes)
                 {
                     Stop($"Stopped before exceeding the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
@@ -111,10 +116,8 @@ public sealed class FileDiscoverer : IFileDiscoverer
         {
             if (options.MaxRuntimeSeconds is not int maxSeconds || maxSeconds <= 0)
                 return false;
-
             if ((DateTimeOffset.UtcNow - started).TotalSeconds < maxSeconds)
                 return false;
-
             Stop($"Stopped after reaching the {maxSeconds:N0}s time limit.");
             return true;
         }
@@ -125,6 +128,13 @@ public sealed class FileDiscoverer : IFileDiscoverer
             {
                 Stop($"Stopped after inspecting {maxSearchedFiles:N0} searched files.");
                 return true;
+            }
+
+            if (options.MinScannedBytes is long minScannedBytes && scannedBytes < minScannedBytes)
+            {
+                // Haven't reached the minimum yet — keep going without yielding this file.
+                // This is not a stop condition; we simply skip emitting until the threshold is met.
+                return false;
             }
 
             if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes)
@@ -139,11 +149,10 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 return true;
             }
 
-            if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes >= maxMatchedBytes)
-            {
-                Stop($"Stopped after reaching the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
-                return true;
-            }
+            // MinMatchedBytes: don't stop, but suppress yielding this candidate until
+            // the minimum matched-byte threshold has been reached.
+            if (options.MinMatchedBytes is long minMatchedBytes && matchedBytes < minMatchedBytes)
+                return false;
 
             return false;
         }
@@ -153,21 +162,19 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
     private static bool IsEnabled(MediaCategory category, ScanOptions options) => category switch
     {
-        MediaCategory.Image => options.EnableImages,
-        MediaCategory.Video => options.EnableVideo,
-        MediaCategory.Audio => options.EnableAudio,
+        MediaCategory.Image    => options.EnableImages,
+        MediaCategory.Video    => options.EnableVideo,
+        MediaCategory.Audio    => options.EnableAudio,
         MediaCategory.Document => options.EnableDocuments,
-        _ => false
+        _                      => false
     };
 
     private static MediaCategory GetCategory(string file, string extension, ScanOptions options, Regex? customImageRegex)
     {
         if (SupportedMedia.GetCategory(extension) is { } category && category != MediaCategory.Unknown)
             return category;
-
         if (options.CustomImageExtensions?.Contains(extension) == true)
             return MediaCategory.Image;
-
         return customImageRegex?.IsMatch(Path.GetFileName(file)) == true ? MediaCategory.Image : MediaCategory.Unknown;
     }
 
@@ -175,7 +182,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
     {
         if (string.IsNullOrWhiteSpace(pattern))
             return null;
-
         return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
     }
 
@@ -217,9 +223,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
         void AddIfInsideSource(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path))
-                return;
-
+            if (string.IsNullOrWhiteSpace(path)) return;
             var fullPath = Path.GetFullPath(path);
             if (!PathsEqual(source, fullPath) && IsSameOrChildPath(source, fullPath))
                 roots.Add(NormalizeDirectory(fullPath));
@@ -246,8 +250,8 @@ public sealed class FileDiscoverer : IFileDiscoverer
     private static string FormatBytes(long bytes)
     {
         if (bytes >= 1073741824L) return (bytes / 1073741824d).ToString("N2") + " GB";
-        if (bytes >= 1048576L) return (bytes / 1048576d).ToString("N1") + " MB";
-        if (bytes >= 1024L) return (bytes / 1024d).ToString("N1") + " KB";
+        if (bytes >= 1048576L)    return (bytes / 1048576d).ToString("N1") + " MB";
+        if (bytes >= 1024L)       return (bytes / 1024d).ToString("N1") + " KB";
         return bytes + " B";
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MediaToolsNext.Core;
 
 namespace MediaToolsNext.Infrastructure;
@@ -6,7 +7,10 @@ public sealed class ExternalToolProbe : IExternalToolProbe
 {
     private static readonly string[] ToolNames = ["ffmpeg", "ffprobe", "magick", "qpdf"];
     private readonly Lazy<IReadOnlyList<ToolStatus>> _statuses;
-    private readonly Dictionary<string, string?> _pathCache = new(StringComparer.OrdinalIgnoreCase);
+    // ConcurrentDictionary eliminates the race where two threads both call
+    // ResolveExecutable for the same key before either has cached the result.
+    private readonly ConcurrentDictionary<string, string?> _pathCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public ExternalToolProbe()
     {
@@ -20,19 +24,8 @@ public sealed class ExternalToolProbe : IExternalToolProbe
 
     public IReadOnlyList<ToolStatus> GetStatuses() => _statuses.Value;
 
-    public string? FindExecutable(string commandName)
-    {
-        lock (_pathCache)
-        {
-            if (_pathCache.TryGetValue(commandName, out var cached))
-                return cached;
-        }
-
-        var resolved = ResolveExecutable(commandName);
-        lock (_pathCache)
-            _pathCache[commandName] = resolved;
-        return resolved;
-    }
+    public string? FindExecutable(string commandName) =>
+        _pathCache.GetOrAdd(commandName, ResolveExecutable);
 
     private static string? ResolveExecutable(string commandName)
     {

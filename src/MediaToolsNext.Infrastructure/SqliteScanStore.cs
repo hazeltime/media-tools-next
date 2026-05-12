@@ -38,6 +38,8 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
                 backup_target TEXT NULL,
                 timestamp_utc TEXT NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS idx_results_session_id ON results (session_id);
+            CREATE INDEX IF NOT EXISTS idx_results_full_path ON results (full_path, size_bytes, last_write_utc);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -63,7 +65,31 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
     {
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await InsertResultAsync(connection, result, cancellationToken);
+    }
+
+    /// <summary>
+    /// Inserts a batch of results in a single transaction. Prefer this over
+    /// repeated SaveResultAsync calls when writing many rows at once.
+    /// </summary>
+    public async Task BatchSaveResultsAsync(IEnumerable<ScanResultRecord> results, CancellationToken cancellationToken)
+    {
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+        foreach (var result in results)
+            await InsertResultAsync(connection, result, cancellationToken, tx as SqliteTransaction);
+        await tx.CommitAsync(cancellationToken);
+    }
+
+    private static async Task InsertResultAsync(
+        SqliteConnection connection,
+        ScanResultRecord result,
+        CancellationToken cancellationToken,
+        SqliteTransaction? tx = null)
+    {
         var command = connection.CreateCommand();
+        if (tx is not null) command.Transaction = tx;
         command.CommandText = """
             INSERT INTO results VALUES (
                 $session,$full,$relative,$ext,$category,$size,$lastWrite,$status,$validator,$detail,
@@ -143,21 +169,38 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
                 Enum.Parse<ScanActionMode>(reader.GetString(4)),
                 DateTimeOffset.Parse(reader.GetString(5))));
         }
-
         return sessions;
     }
 
     public async Task<ScanSummary> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var results = await ListResultsAsync(sessionId, cancellationToken);
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        var command = connection.CreateCommand();
+        // Aggregate in SQL — never load all rows into memory for a summary.
+        command.CommandText = """
+            SELECT status, COUNT(*) as cnt
+            FROM results
+            WHERE session_id = $session
+            GROUP BY status
+            """;
+        command.Parameters.AddWithValue("$session", sessionId.ToString());
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            counts[reader.GetString(0)] = reader.GetInt32(1);
+
+        int Get(ValidationStatus s) => counts.TryGetValue(s.ToString(), out var n) ? n : 0;
+        var total = counts.Values.Sum();
         return new ScanSummary(
             sessionId,
-            results.Count,
-            results.Count(x => x.Status == ValidationStatus.Valid),
-            results.Count(x => x.Status == ValidationStatus.Corrupt),
-            results.Count(x => x.Status == ValidationStatus.Unknown),
-            results.Count(x => x.Status == ValidationStatus.Error),
-            results.Count(x => x.Status == ValidationStatus.Skipped));
+            total,
+            Get(ValidationStatus.Valid),
+            Get(ValidationStatus.Corrupt),
+            Get(ValidationStatus.Unknown),
+            Get(ValidationStatus.Error),
+            Get(ValidationStatus.Skipped));
     }
 
     private static ScanResultRecord ReadResult(SqliteDataReader reader)

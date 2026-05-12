@@ -12,10 +12,15 @@ public sealed class ScannerPipeline(
 {
     public async Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
     {
+        // Build a linked token that also cancels on MaxRuntimeSeconds expiry.
+        // All operations inside this method use runToken so that the timeout
+        // applies uniformly, including store initialisation and session creation.
         using var runtimeCts = CreateRuntimeCancellation(options, cancellationToken);
         var runToken = runtimeCts?.Token ?? cancellationToken;
-        await store.InitializeAsync(cancellationToken);
-        var sessionId = await store.CreateSessionAsync(options, cancellationToken);
+
+        await store.InitializeAsync(runToken);
+        var sessionId = await store.CreateSessionAsync(options, runToken);
+
         var channel = Channel.CreateBounded<FileCandidate>(new BoundedChannelOptions(Math.Max(16, options.MaxConcurrency * 4))
         {
             SingleWriter = true,
@@ -61,6 +66,8 @@ public sealed class ScannerPipeline(
             options.LimitState?.StopAfterWorkStarted(RuntimeStopReason(options));
         }
 
+        // Use the outer cancellationToken for the final summary read so we can
+        // still retrieve results even if the runtime limit was reached.
         var summary = await store.GetSummaryAsync(sessionId, cancellationToken);
         return summary with { CompletionReason = options.LimitState?.StopReason ?? summary.CompletionReason };
     }
