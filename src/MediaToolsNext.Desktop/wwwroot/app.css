@@ -121,6 +121,44 @@ small, .muted, .page-header p { color: #53606d; font-weight: 500; }
 .run-status span, .result-count span { color: #53606d; font-size: 13px; }
 .run-facts .info-grid div { min-height: 72px; }
 
+/* Live outcome counts */
+.live-counts-panel { padding: 12px 16px; }
+.live-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.live-count {
+    align-items: center;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 80px;
+    padding: 10px 14px;
+    text-align: center;
+}
+.live-count-value {
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+}
+.live-count-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+}
+.live-count.total   { background: #f1f5f9; color: #17202a; }
+.live-count.valid   { background: #dcfce7; color: #166534; }
+.live-count.corrupt { background: #fee2e2; color: #991b1b; }
+.live-count.unknown { background: #fef3c7; color: #92400e; }
+.live-count.error   { background: #ffe4e6; color: #9f1239; }
+.live-count.skipped { background: #e6edf2; color: #334e68; }
+.live-count.perf    { background: #eff6ff; color: #1d4ed8; }
+
 .result-toolbar {
     align-items: end;
     display: grid;
@@ -224,4 +262,7 @@ a, .btn-link { color: #006bb7; }
     .page-stack { max-width: none; }
     .result-toolbar { grid-template-columns: 1fr; }
     .input-action { grid-template-columns: 1fr; }
+    .live-counts { gap: 6px; }
+    .live-count { min-width: 68px; padding: 8px 10px; }
+    .live-count-value { font-size: 18px; }
 }

@@ -38,13 +38,47 @@
         }
     </section>
 
+    @if (State.Results.Any() || State.IsScanning)
+    {
+        <section class="panel live-counts-panel">
+            <div class="live-counts">
+                <div class="live-count total">
+                    <span class="live-count-value">@State.Results.Count.ToString("N0")</span>
+                    <span class="live-count-label">Scanned</span>
+                </div>
+                <div class="live-count valid">
+                    <span class="live-count-value">@CountStatus(ValidationStatus.Valid).ToString("N0")</span>
+                    <span class="live-count-label">Valid</span>
+                </div>
+                <div class="live-count corrupt">
+                    <span class="live-count-value">@CountStatus(ValidationStatus.Corrupt).ToString("N0")</span>
+                    <span class="live-count-label">Corrupt</span>
+                </div>
+                <div class="live-count unknown">
+                    <span class="live-count-value">@CountStatus(ValidationStatus.Unknown).ToString("N0")</span>
+                    <span class="live-count-label">Unknown</span>
+                </div>
+                <div class="live-count error">
+                    <span class="live-count-value">@CountStatus(ValidationStatus.Error).ToString("N0")</span>
+                    <span class="live-count-label">Error</span>
+                </div>
+                <div class="live-count skipped">
+                    <span class="live-count-value">@CountStatus(ValidationStatus.Skipped).ToString("N0")</span>
+                    <span class="live-count-label">Skipped</span>
+                </div>
+                <div class="live-count perf">
+                    <span class="live-count-value">@State.Performance.FilesPerSecond.ToString("N1")</span>
+                    <span class="live-count-label">Files/s</span>
+                </div>
+            </div>
+        </section>
+    }
+
     <section class="summary-grid">
         <div><strong>@(State.Preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
         <div><strong>@(State.Preview?.TotalDirectories ?? 0)</strong><span>Preview folders</span></div>
         <div><strong>@PreviewMb</strong><span>Preview MB</span></div>
-        <div><strong>@(State.Summary?.Total ?? State.Performance.FilesProcessed)</strong><span>Scanned</span></div>
         <div><strong>@State.LastCompletionReason</strong><span>Completion</span></div>
-        <div><strong>@State.Performance.FilesPerSecond.ToString("N1")</strong><span>Files/s</span></div>
     </section>
 
     <section class="panel run-facts">
@@ -91,6 +125,7 @@
         : State.IsPreviewing
             ? "Discovering matched files only. No files are copied or changed."
             : "No active job. Preview or scan can be started.";
+    private int CountStatus(ValidationStatus s) => State.Results.Count(r => r.Status == s);
     private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
 
     protected override void OnInitialized() => State.Changed += OnStateChanged;
