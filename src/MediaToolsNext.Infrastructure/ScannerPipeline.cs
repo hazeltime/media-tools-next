@@ -25,6 +25,15 @@ public sealed class ScannerPipeline(
             await throttler.WaitAsync(cancellationToken);
             try
             {
+                var reusable = await store.FindReusableResultAsync(candidate, cancellationToken);
+                if (reusable is not null)
+                {
+                    var resumed = new ScanResultRecord(sessionId, candidate, ValidationStatus.Skipped, reusable.Validator, "resume_unchanged: " + reusable.Status, "skipped", null, null, DateTimeOffset.UtcNow);
+                    await store.SaveResultAsync(resumed, cancellationToken);
+                    progress?.Report(resumed);
+                    return;
+                }
+
                 var outcome = _validators.TryGetValue(candidate.Category, out var validator)
                     ? await validator.ValidateAsync(candidate, options, cancellationToken)
                     : new ValidationOutcome(candidate, ValidationStatus.Skipped, "none", "category_disabled", TimeSpan.Zero);
@@ -43,4 +52,3 @@ public sealed class ScannerPipeline(
         return await store.GetSummaryAsync(sessionId, cancellationToken);
     }
 }
-

@@ -25,5 +25,27 @@ public class SqliteStoreTests
         }
         finally { Directory.Delete(root, true); }
     }
-}
 
+    [Fact]
+    public async Task FindsReusableUnchangedResult()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            var db = Path.Combine(root, "state.db");
+            var store = new SqliteScanStore(db);
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db);
+            await store.InitializeAsync(CancellationToken.None);
+            var session = await store.CreateSessionAsync(options, CancellationToken.None);
+            var candidate = new FileCandidate(Path.Combine(root, "a.txt"), "a.txt", ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
+            await store.SaveResultAsync(new ScanResultRecord(session, candidate, ValidationStatus.Valid, "test", null, "dry-run", null, null, DateTimeOffset.UtcNow), CancellationToken.None);
+
+            var reusable = await store.FindReusableResultAsync(candidate, CancellationToken.None);
+
+            Assert.NotNull(reusable);
+            Assert.Equal(ValidationStatus.Valid, reusable.Status);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+}
