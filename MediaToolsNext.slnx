@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MediaToolsNext.Cli/MediaToolsNext.Cli.csproj" />
+    <Project Path="src/MediaToolsNext.Core/MediaToolsNext.Core.csproj" />
+    <Project Path="src/MediaToolsNext.Desktop/MediaToolsNext.Desktop.csproj" />
+    <Project Path="src/MediaToolsNext.Infrastructure/MediaToolsNext.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MediaToolsNext.Tests/MediaToolsNext.Tests.csproj" />
+  </Folder>
+</Solution>

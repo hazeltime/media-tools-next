@@ -1,0 +1,83 @@
+@page "/"
+@using MediaToolsNext.Core
+@inject IScannerPipeline Pipeline
+@inject IExternalToolProbe ToolProbe
+
+<div class="scanner-shell">
+    <header>
+        <div>
+            <h1>Media Tools Next</h1>
+            <p>Scan, classify, sort, and mirror media files with dry-run safety by default.</p>
+        </div>
+        <button disabled="@_running" @onclick="RunAsync">@(_running ? "Scanning..." : "Start scan")</button>
+    </header>
+
+    <section class="panel grid">
+        <label>Source <input @bind="_sourcePath" /></label>
+        <label>Target <input @bind="_targetRoot" /></label>
+        <label>Backup <input @bind="_backupRoot" /></label>
+        <label>Concurrency <input type="number" min="1" max="64" @bind="_concurrency" /></label>
+        <label>Mode
+            <select @bind="_mode">
+                <option value="@ScanActionMode.DryRun">Dry run</option>
+                <option value="@ScanActionMode.CopySorted">Copy sorted</option>
+                <option value="@ScanActionMode.CopySortedAndBackup">Copy sorted + backup</option>
+            </select>
+        </label>
+    </section>
+
+    <section class="panel tools">
+        @foreach (var tool in ToolProbe.GetStatuses())
+        {
+            <span class="tool @(tool.IsAvailable ? "ok" : "missing")">@tool.Name</span>
+        }
+    </section>
+
+    <section class="stats">
+        <strong>Total</strong><span>@_summary?.Total</span>
+        <strong>Valid</strong><span>@_summary?.Valid</span>
+        <strong>Corrupt</strong><span>@_summary?.Corrupt</span>
+        <strong>Unknown</strong><span>@_summary?.Unknown</span>
+        <strong>Errors</strong><span>@_summary?.Errors</span>
+    </section>
+
+    <section class="panel results">
+        <table>
+            <thead><tr><th>Status</th><th>Category</th><th>Path</th><th>Detail</th></tr></thead>
+            <tbody>
+            @foreach (var row in _results.TakeLast(200).Reverse())
+            {
+                <tr><td>@row.Status</td><td>@row.Candidate.Category</td><td>@row.Candidate.RelativePath</td><td>@row.Detail</td></tr>
+            }
+            </tbody>
+        </table>
+    </section>
+</div>
+
+@code {
+    private string _sourcePath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+    private string _targetRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "_media_tools_next");
+    private string? _backupRoot;
+    private int _concurrency = Math.Max(1, Environment.ProcessorCount / 2);
+    private ScanActionMode _mode = ScanActionMode.DryRun;
+    private bool _running;
+    private ScanSummary? _summary;
+    private readonly List<ScanResultRecord> _results = [];
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        _summary = null;
+        _results.Clear();
+        var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
+        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, true, true, true, true, _concurrency, 120, db);
+        var progress = new Progress<ScanResultRecord>(record =>
+        {
+            _results.Add(record);
+            InvokeAsync(StateHasChanged);
+        });
+        try { _summary = await Pipeline.RunAsync(options, progress, CancellationToken.None); }
+        finally { _running = false; }
+    }
+}
+
