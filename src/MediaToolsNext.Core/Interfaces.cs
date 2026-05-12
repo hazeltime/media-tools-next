@@ -27,6 +27,7 @@ public interface IScanStore
     Task InitializeAsync(CancellationToken cancellationToken);
     Task<Guid> CreateSessionAsync(ScanOptions options, CancellationToken cancellationToken);
     Task SaveResultAsync(ScanResultRecord result, CancellationToken cancellationToken);
+    Task BatchSaveResultsAsync(IEnumerable<ScanResultRecord> results, CancellationToken cancellationToken);
     Task<ScanResultRecord?> FindReusableResultAsync(FileCandidate candidate, CancellationToken cancellationToken);
     Task<IReadOnlyList<ScanResultRecord>> ListResultsAsync(Guid sessionId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ScanSessionRecord>> ListSessionsAsync(int take, CancellationToken cancellationToken);

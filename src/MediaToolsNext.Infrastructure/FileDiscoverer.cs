@@ -30,8 +30,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
         var scannedBytes  = 0L;
         var matchedBytes  = 0L;
         var matchedDirs   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // MaxFiles and MaxDirectories are legacy aliases kept for CLI backwards
-        // compatibility. MaxMatchedFiles / MaxSearchedDirectories take precedence.
         var maxSearchedDirs  = options.MaxSearchedDirectories ?? options.MaxDirectories;
         var maxMatchedFiles  = options.MaxMatchedFiles ?? options.MaxFiles;
         var customImageRegex = CreateRegex(options.CustomImageRegex);
@@ -73,12 +71,10 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
                 FileInfo info;
                 try { info = new FileInfo(file); }
-                catch (PathTooLongException)         { continue; }
-                catch (UnauthorizedAccessException)  { continue; }
-                catch                                { continue; }
+                catch (PathTooLongException)        { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                catch                               { continue; }
 
-                // Cache Exists once — FileInfo.Exists is not memoised and each
-                // call performs a filesystem stat.
                 var fileExists = info.Exists;
                 var fileLength = fileExists ? info.Length : 0L;
 
@@ -170,18 +166,28 @@ public sealed class FileDiscoverer : IFileDiscoverer
         void Stop(string reason) => options.LimitState?.Stop(reason);
     }
 
+    // C# does not allow yield inside a catch clause. This method captures the
+    // error string into a local before the catch exits, then yields from normal
+    // iterator flow after the try/catch.
     private static IEnumerable<(string Path, string? Error)> SafeEnumerateFilesWithErrors(string path)
     {
-        IEnumerable<string> entries;
+        IEnumerable<string>? entries = null;
+        string? directoryError = null;
         try
         {
             entries = Directory.EnumerateFiles(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
         }
-        catch (UnauthorizedAccessException ex) { yield return (path, "access_denied: " + ex.Message); yield break; }
+        catch (UnauthorizedAccessException ex) { directoryError = "access_denied: " + ex.Message; }
         catch (PathTooLongException)           { yield break; }
         catch                                  { yield break; }
 
-        foreach (var file in entries)
+        if (directoryError is not null)
+        {
+            yield return (path, directoryError);
+            yield break;
+        }
+
+        foreach (var file in entries!)
             yield return (NormalizeLongPath(file), null);
     }
 
