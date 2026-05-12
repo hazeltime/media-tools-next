@@ -46,3 +46,8 @@ public interface IScanPreviewService
 {
     Task<ScanPreview> PreviewAsync(ScanOptions options, CancellationToken cancellationToken);
 }
+
+public interface IReportExporter
+{
+    Task ExportCsvAsync(IEnumerable<ScanResultRecord> records, string path, CancellationToken cancellationToken);
+}

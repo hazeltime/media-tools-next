@@ -11,6 +11,7 @@ var source = args[0];
 var target = args[1];
 var backup = ValueAfter("--backup");
 var profile = ScanProfiles.Get(ValueAfter("--profile"));
+var exportPath = ValueAfter("--export");
 var db = ValueAfter("--db") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
 var tuning = new HardwareTuner().Recommend(source, target);
 var concurrency = int.TryParse(ValueAfter("--concurrency"), out var parsed) ? parsed : tuning.RecommendedConcurrency;
@@ -31,11 +32,12 @@ if (args.Contains("--preview"))
         Console.WriteLine($"- {item.Key}: {item.Value}");
     return;
 }
+var store = new SqliteScanStore(db);
 var pipeline = new ScannerPipeline(
     new FileDiscoverer(),
     [new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)],
     new FileActionService(),
-    new SqliteScanStore(db));
+    store);
 
 var metrics = new ScanPerformanceTracker();
 var progress = new Progress<ScanResultRecord>(r =>
@@ -45,6 +47,12 @@ var progress = new Progress<ScanResultRecord>(r =>
 });
 var summary = await pipeline.RunAsync(options, progress, CancellationToken.None);
 Console.WriteLine($"Done. total={summary.Total} valid={summary.Valid} corrupt={summary.Corrupt} unknown={summary.Unknown} errors={summary.Errors}");
+if (!string.IsNullOrWhiteSpace(exportPath))
+{
+    var records = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
+    await new CsvReportExporter().ExportCsvAsync(records, exportPath, CancellationToken.None);
+    Console.WriteLine($"Exported CSV: {exportPath}");
+}
 
 string? ValueAfter(string name)
 {

@@ -12,6 +12,7 @@ public static class MediaToolsServices
         services.AddSingleton<IFileDiscoverer, FileDiscoverer>();
         services.AddSingleton<IScanPreviewService, ScanPreviewService>();
         services.AddSingleton<IFileActionService, FileActionService>();
+        services.AddSingleton<IReportExporter, CsvReportExporter>();
         services.AddSingleton<IMediaValidator, ImageValidator>();
         services.AddSingleton<IMediaValidator>(sp => new MediaStreamValidator(MediaCategory.Video, sp.GetRequiredService<IExternalToolProbe>()));
         services.AddSingleton<IMediaValidator>(sp => new MediaStreamValidator(MediaCategory.Audio, sp.GetRequiredService<IExternalToolProbe>()));
