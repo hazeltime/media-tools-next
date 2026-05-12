@@ -2,7 +2,11 @@
 @inject ScanWorkflowState State
 
 <div class="page-stack">
-    <header class="page-header"><p class="eyebrow">Step 2</p><h1>Media and filters</h1><p>Select image files now; other families are available but secondary.</p></header>
+    <header class="page-header">
+        <p class="eyebrow">Step 2</p>
+        <h1>Media and filters</h1>
+        <p>Choose which file families to scan and apply any filename or size filters.</p>
+    </header>
 
     <section class="panel">
         <h2>Image scan preset</h2>
@@ -24,16 +28,29 @@
             <label class="choice"><input type="checkbox" @bind="State.EnableAudio" /> Audio</label>
             <label class="choice"><input type="checkbox" @bind="State.EnableDocuments" /> Documents</label>
         </div>
-        <div class="extension-cloud">
-            @foreach (var ext in SupportedMedia.ImageExtensions.OrderBy(x => x)) { <span>@ext</span> }
-        </div>
+        @if (State.EnableImages)
+        {
+            <div class="extension-cloud">
+                @foreach (var ext in SupportedMedia.ImageExtensions.OrderBy(x => x)) { <span>@ext</span> }
+            </div>
+        }
     </section>
 
     <section class="panel">
         <h2>Custom image types</h2>
         <div class="form-grid two">
-            <label>Extra image extensions <small>Accepts jpg, .jpg, or *.jpg separated by spaces.</small><textarea rows="3" @bind="State.CustomImageExtensionsText" /></label>
-            <label>Custom image filename regex <small>@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "Regex is invalid.")</small><input @bind="State.CustomImageRegex" /></label>
+            <label>
+                Extra image extensions
+                <small>Accepts jpg, .jpg, or *.jpg separated by spaces.</small>
+                <textarea rows="3" @bind="State.CustomImageExtensionsText" />
+            </label>
+            <label>
+                Custom image filename regex
+                <small class="@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "" : "regex-invalid")">
+                    @(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "⚠ Regex is invalid.")
+                </small>
+                <input @bind="State.CustomImageRegex" />
+            </label>
         </div>
     </section>
 

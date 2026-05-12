@@ -13,6 +13,12 @@ button {
     padding: 10px 14px;
 }
 
+button.btn-primary {
+    background: #116466;
+    font-size: 15px;
+    padding: 11px 20px;
+}
+
 button.secondary { background: #334e68; }
 button.danger { background: #b42318; }
 button:disabled { background: #94a3b8; cursor: not-allowed; }
@@ -56,6 +62,20 @@ small, .muted, .page-header p { color: #53606d; font-weight: 500; }
 .button-row, .action-bar, .tool-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .choice { display: flex; align-items: center; gap: 8px; }
 .confirm { color: #7c2d12; margin-top: 12px; }
+
+/* Disabled section overlay for inactive copy-outcomes in DryRun */
+.choice-disabled { opacity: 0.45; pointer-events: none; }
+
+/* Regex validation feedback */
+.regex-invalid { color: #b42318 !important; font-weight: 700; }
+
+/* Empty state placeholder text */
+.empty-state { font-style: italic; padding: 12px 0; }
+
+/* Slider with min/max labels */
+.slider-row { display: flex; align-items: center; gap: 6px; }
+.slider-row input[type="range"] { flex: 1; }
+.slider-label { color: #53606d; font-size: 11px; font-weight: 600; white-space: nowrap; }
 
 .select-card, .info-grid div, .summary-grid div {
     background: #f8fafc;
@@ -166,7 +186,25 @@ th { color: #53606d; font-size: 12px; text-transform: uppercase; }
 
 .help-panel details { border-top: 1px solid #e6edf2; padding: 10px 0; }
 .help-panel summary { cursor: pointer; font-weight: 900; }
+.help-panel pre { background: #f1f5f9; border-radius: 6px; font-size: 13px; padding: 10px 14px; overflow-x: auto; }
+.help-panel code { font-family: Consolas, monospace; font-size: 13px; }
 a, .btn-link { color: #006bb7; }
+
+.session-list { display: grid; gap: 8px; }
+.session-row {
+    background: #f8fafc;
+    border: 1px solid #d9e1e7;
+    border-radius: 8px;
+    cursor: pointer;
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    text-align: left;
+    width: 100%;
+}
+.session-row:hover { background: #eaf7fb; border-color: #116466; }
+.session-row strong { font-size: 14px; }
+.session-row span { color: #53606d; font-size: 12px; font-weight: 500; }
 
 #blazor-error-ui {
     background: lightyellow;

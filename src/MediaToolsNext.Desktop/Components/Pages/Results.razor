@@ -5,17 +5,30 @@
 @implements IDisposable
 
 <div class="page-stack">
-    <header class="page-header"><p class="eyebrow">Review</p><h1>Results</h1><p>Structured scan results. Use filters instead of reading the full log.</p></header>
+    <header class="page-header">
+        <p class="eyebrow">Review</p>
+        <h1>Results</h1>
+        <p>Structured scan results. Use filters instead of reading the full log.</p>
+    </header>
+
     <section class="panel run-facts">
         <h2>Scan status</h2>
-        <div class="info-grid">
-            <div><strong>@State.LastRunType</strong><span>Type</span></div>
-            <div><strong>@FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
-            <div><strong>@FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
-        </div>
-        <p class="muted">@State.LastRunSettings</p>
-        <p class="muted">Completion: @State.LastCompletionReason</p>
+        @if (State.LastRunStartedLocal is null)
+        {
+            <p class="muted empty-state">No scan has been run yet. Go to Run to start one, or load a saved session from Saved scans.</p>
+        }
+        else
+        {
+            <div class="info-grid">
+                <div><strong>@State.LastRunType</strong><span>Type</span></div>
+                <div><strong>@FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
+                <div><strong>@FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
+            </div>
+            <p class="muted" style="margin-top:8px">@State.LastRunSettings</p>
+            <p class="muted">Completion: @State.LastCompletionReason</p>
+        }
     </section>
+
     <section class="result-toolbar panel">
         <label>Status
             <select @bind="StatusFilter">
@@ -23,22 +36,37 @@
                 @foreach (var status in Enum.GetValues<ValidationStatus>()) { <option value="@status.ToString()">@status</option> }
             </select>
         </label>
-        <label>Search path or detail <input @bind="SearchText" @bind:event="oninput" placeholder="filename, folder, validator detail..." /></label>
+        <label>Search path or detail <input @bind="SearchText" @bind:event="oninput" placeholder="filename, folder, validator detail…" /></label>
         <label>Sort
             <select @bind="State.ReportSort">
                 <option value="status-path">Status, then path</option>
                 <option value="path">Path</option>
                 <option value="size-desc">Largest first</option>
+                <option value="time">Scan order</option>
             </select>
         </label>
         <button disabled="@(!State.Results.Any())" @onclick="ExportAsync">Export @State.ReportFormat.ToUpperInvariant()</button>
     </section>
+
     <section class="summary-grid">
         <div><strong>@State.Results.Count</strong><span>Total</span></div>
         @foreach (var status in Enum.GetValues<ValidationStatus>()) { <div><strong>@State.Results.Count(x => x.Status == status)</strong><span>@status</span></div> }
     </section>
+
     <section class="panel results-panel">
-        <div class="result-count"><strong>@FilteredRows.Count.ToString("N0")</strong><span>matching rows. Showing first @VisibleRows.Count.ToString("N0").</span></div>
+        <div class="result-count">
+            <strong>@FilteredRows.Count.ToString("N0")</strong>
+            <span>
+                @if (FilteredRows.Count > 500)
+                {
+                    <text>matching rows — showing first 500.</text>
+                }
+                else
+                {
+                    <text>matching rows.</text>
+                }
+            </span>
+        </div>
         <table class="results-table">
             <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
             <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
@@ -78,9 +106,7 @@
     };
 
     protected override void OnInitialized() => State.Changed += OnStateChanged;
-
     public void Dispose() => State.Changed -= OnStateChanged;
-
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
     private bool MatchesFilter(ScanResultRecord row)
@@ -102,6 +128,12 @@
         State.Message = "Exported results: " + path;
     }
 
-    private static string FormatBytes(long bytes) => bytes >= 1048576 ? (bytes / 1048576d).ToString("N1") + " MB" : bytes + " B";
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_048_576) return (bytes / 1_048_576d).ToString("N1") + " MB";
+        if (bytes >= 1_024) return (bytes / 1_024d).ToString("N1") + " KB";
+        return bytes + " B";
+    }
+
     private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
 }

@@ -3,7 +3,12 @@
 @inject IExternalToolProbe ToolProbe
 
 <div class="page-stack">
-    <header class="page-header"><p class="eyebrow">Step 3</p><h1>Validation depth</h1><p>Choose how hard the app tries to prove an image is actually readable.</p></header>
+    <header class="page-header">
+        <p class="eyebrow">Step 3</p>
+        <h1>Validation depth</h1>
+        <p>Choose how hard the app tries to prove an image is actually readable.</p>
+    </header>
+
     <section class="panel">
         <div class="card-grid three">
             @foreach (var depth in Enum.GetValues<ValidationDepth>())
@@ -15,13 +20,28 @@
             }
         </div>
     </section>
+
     <section class="panel">
         <h2>Tools and performance</h2>
-        <div class="tool-row">
-            @foreach (var tool in ToolProbe.GetStatuses()) { <span class="tool @(tool.IsAvailable ? "ok" : "missing")">@tool.Name</span> }
+        @if (ToolProbe.GetStatuses().All(t => !t.IsAvailable))
+        {
+            <div class="preflight-item error" style="margin-bottom:12px">⚠ No external tools found. Deep validation and media scanning will be limited to header checks only.</div>
+        }
+        <div class="tool-row" style="margin-bottom:12px">
+            @foreach (var tool in ToolProbe.GetStatuses())
+            {
+                <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.IsAvailable ? tool.Path : "Not found on PATH")">@tool.Name</span>
+            }
         </div>
         <div class="form-grid three">
-            <label>Concurrency: @State.Concurrency <input type="range" min="1" max="32" @bind="State.Concurrency" /></label>
+            <label>
+                Concurrency: @State.Concurrency
+                <div class="slider-row">
+                    <span class="slider-label">1</span>
+                    <input type="range" min="1" max="32" @bind="State.Concurrency" @bind:event="oninput" />
+                    <span class="slider-label">32</span>
+                </div>
+            </label>
             <label>Tool timeout seconds <input type="number" min="5" max="600" @bind="State.ToolTimeoutSeconds" /></label>
             @if (State.EnableAudio || State.EnableVideo)
             {

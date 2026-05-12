@@ -6,8 +6,14 @@
 @implements IDisposable
 
 <div class="page-stack">
-    <header class="page-header"><p class="eyebrow">Step 5</p><h1>Run</h1><p>Preview first, then scan when preflight is clean.</p></header>
+    <header class="page-header">
+        <p class="eyebrow">Step 5</p>
+        <h1>Run</h1>
+        <p>Preview first, then scan when preflight is clean.</p>
+    </header>
+
     @if (!string.IsNullOrWhiteSpace(State.Message)) { <div class="notice">@State.Message</div> }
+
     <section class="panel">
         <h2>Preflight</h2>
         <div class="preflight-list">
@@ -15,26 +21,23 @@
             @if (!Errors.Any()) { <div class="preflight-item ok"><strong>OK</strong><span>Ready to preview or scan.</span></div> }
         </div>
     </section>
+
     <section class="run-status @(State.IsBusy ? "active" : "")">
-        <strong>@RunStatus</strong>
+        <strong>@(State.IsBusy ? "⏳ " : "")@RunStatus</strong>
         <span>@RunDetail</span>
     </section>
-    <section class="panel run-facts">
-        <h2>Current run facts</h2>
-        <div class="info-grid">
-            <div><strong>@State.LastRunType</strong><span>Type</span></div>
-            <div><strong>@FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
-            <div><strong>@FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
-        </div>
-        <p class="muted">@State.LastRunSettings</p>
-    </section>
+
     <section class="action-bar">
-        <button disabled="@(State.IsBusy || Errors.Any())" @onclick="PreviewAsync">@(State.IsPreviewing ? "Previewing..." : "Run preview")</button>
-        <button disabled="@(State.IsBusy || Errors.Any())" @onclick="RunAsync">@(State.IsScanning ? "Scanning..." : "Start scan")</button>
-        <button class="secondary" disabled="@(!State.IsScanning || ScanControl.IsPaused)" @onclick="Pause">Pause</button>
-        <button class="secondary" disabled="@(!State.IsScanning || !ScanControl.IsPaused)" @onclick="Resume">Resume</button>
-        <button class="danger" disabled="@(!State.IsScanning)" @onclick="Cancel">Cancel</button>
+        <button class="btn-primary" disabled="@(State.IsBusy || Errors.Any())" @onclick="PreviewAsync">@(State.IsPreviewing ? "Previewing…" : "Run preview")</button>
+        <button class="btn-primary" disabled="@(State.IsBusy || Errors.Any())" @onclick="RunAsync">@(State.IsScanning ? "Scanning…" : "Start scan")</button>
+        @if (State.IsScanning)
+        {
+            <button class="secondary" disabled="@ScanControl.IsPaused" @onclick="Pause">Pause</button>
+            <button class="secondary" disabled="@(!ScanControl.IsPaused)" @onclick="Resume">Resume</button>
+            <button class="danger" @onclick="Cancel">Cancel</button>
+        }
     </section>
+
     <section class="summary-grid">
         <div><strong>@(State.Preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
         <div><strong>@(State.Preview?.TotalDirectories ?? 0)</strong><span>Preview folders</span></div>
@@ -43,6 +46,24 @@
         <div><strong>@State.LastCompletionReason</strong><span>Completion</span></div>
         <div><strong>@State.Performance.FilesPerSecond.ToString("N1")</strong><span>Files/s</span></div>
     </section>
+
+    <section class="panel run-facts">
+        <h2>Current run</h2>
+        @if (State.LastRunStartedLocal is null)
+        {
+            <p class="muted empty-state">No scan has been run yet in this session.</p>
+        }
+        else
+        {
+            <div class="info-grid">
+                <div><strong>@State.LastRunType</strong><span>Type</span></div>
+                <div><strong>@FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
+                <div><strong>@FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
+            </div>
+            <p class="muted" style="margin-top:8px">@State.LastRunSettings</p>
+        }
+    </section>
+
     @if (State.Preview is not null)
     {
         <section class="panel">
@@ -73,71 +94,32 @@
     private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
 
     protected override void OnInitialized() => State.Changed += OnStateChanged;
-
     public void Dispose() => State.Changed -= OnStateChanged;
-
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
 
     private async Task PreviewAsync()
     {
-        if (Errors.Any())
-        {
-            State.Message = "Preview blocked: " + Errors[0];
-            return;
-        }
-
-        if (!State.TryStartPreview())
-        {
-            State.Message = "A preview or scan is already running.";
-            State.NotifyChanged();
-            return;
-        }
-
+        if (Errors.Any()) { State.Message = "Preview blocked: " + Errors[0]; return; }
+        if (!State.TryStartPreview()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
         var limit = new ScanLimitState();
         try
         {
             State.Preview = await PreviewService.PreviewAsync(State.BuildOptions(limit), CancellationToken.None);
             State.LastCompletionReason = limit.StopReason ?? "Source exhausted.";
-            var message = State.Preview.TotalFiles == 0
-                ? "Preview complete: no matching files found."
-                : $"Preview complete: {State.Preview.TotalFiles:N0} matching files found.";
+            var message = State.Preview.TotalFiles == 0 ? "Preview complete: no matching files found." : $"Preview complete: {State.Preview.TotalFiles:N0} matching files found.";
             State.FinishPreview(message);
         }
-        catch (Exception ex)
-        {
-            State.LastCompletionReason = "Preview failed.";
-            State.FinishPreview("Preview failed: " + ex.Message);
-        }
-        finally
-        {
-            if (State.IsPreviewing) State.FinishPreview(State.Message ?? "Preview stopped.");
-        }
+        catch (Exception ex) { State.LastCompletionReason = "Preview failed."; State.FinishPreview("Preview failed: " + ex.Message); }
+        finally { if (State.IsPreviewing) State.FinishPreview(State.Message ?? "Preview stopped."); }
     }
 
     private async Task RunAsync()
     {
-        if (Errors.Any())
-        {
-            State.Message = "Scan blocked: " + Errors[0];
-            State.NotifyChanged();
-            return;
-        }
-
-        if (!State.TryStartScan())
-        {
-            State.Message = "A preview or scan is already running.";
-            State.NotifyChanged();
-            return;
-        }
-
+        if (Errors.Any()) { State.Message = "Scan blocked: " + Errors[0]; State.NotifyChanged(); return; }
+        if (!State.TryStartScan()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
         var limit = new ScanLimitState();
         var tracker = new ScanPerformanceTracker();
-        var progress = new Progress<ScanResultRecord>(r =>
-        {
-            State.Results.Add(r);
-            State.Performance = tracker.Add(r);
-            State.NotifyChanged();
-        });
+        var progress = new Progress<ScanResultRecord>(r => { State.Results.Add(r); State.Performance = tracker.Add(r); State.NotifyChanged(); });
         try
         {
             State.Summary = await Pipeline.RunAsync(State.BuildOptions(limit), progress, State.ScanCancellationToken);

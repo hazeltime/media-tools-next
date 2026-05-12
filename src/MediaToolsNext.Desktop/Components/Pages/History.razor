@@ -1,26 +1,55 @@
 @page "/history"
 @inject ScanWorkflowState State
 @inject IScanStore Store
+@inject NavigationManager Nav
 
 <div class="page-stack">
-    <header class="page-header"><p class="eyebrow">Review</p><h1>Saved scans</h1><p>Load prior sessions from the local SQLite database.</p></header>
+    <header class="page-header">
+        <p class="eyebrow">Review</p>
+        <h1>Saved scans</h1>
+        <p>Load prior sessions from the local SQLite database.</p>
+    </header>
     <section class="panel">
-        <button @onclick="Load">Load recent</button>
-        <div class="session-list">
-            @foreach (var session in State.Sessions)
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+            <button @onclick="Load">Reload recent</button>
+            @if (_loaded && !State.Sessions.Any())
             {
-                <button class="session-row" @onclick="() => Open(session.SessionId)"><strong>@session.StartedUtc.LocalDateTime.ToString("g")</strong><span>@session.ActionMode - @session.SourcePath</span></button>
+                <span class="muted">No saved sessions found.</span>
             }
         </div>
+        @if (State.Sessions.Any())
+        {
+            <div class="session-list">
+                @foreach (var session in State.Sessions)
+                {
+                    <button class="session-row" @onclick="() => Open(session.SessionId)">
+                        <strong>@session.StartedUtc.LocalDateTime.ToString("g")</strong>
+                        <span>@FormatMode(session.ActionMode) — @session.SourcePath</span>
+                    </button>
+                }
+            </div>
+        }
+        else if (!_loaded)
+        {
+            <p class="muted empty-state">Click "Reload recent" to list saved scan sessions.</p>
+        }
     </section>
 </div>
 
 @code {
+    private bool _loaded = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
     private async Task Load()
     {
         await Store.InitializeAsync(CancellationToken.None);
         State.Sessions.Clear();
         State.Sessions.AddRange(await Store.ListSessionsAsync(30, CancellationToken.None));
+        _loaded = true;
     }
 
     private async Task Open(Guid id)
@@ -28,5 +57,14 @@
         State.Results.Clear();
         State.Results.AddRange(await Store.ListResultsAsync(id, CancellationToken.None));
         State.Summary = await Store.GetSummaryAsync(id, CancellationToken.None);
+        Nav.NavigateTo("/results");
     }
+
+    private static string FormatMode(string? mode) => mode switch
+    {
+        "DryRun" => "Log only",
+        "CopySorted" => "Copy sorted",
+        "CopySortedAndBackup" => "Copy + backup",
+        _ => mode ?? "Unknown"
+    };
 }
