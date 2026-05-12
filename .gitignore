@@ -13,4 +13,6 @@ TestResults/
 *.sqlite-wal
 *.log
 *.tmp
+MediaToolsNext.exe
+publish-root/
 
