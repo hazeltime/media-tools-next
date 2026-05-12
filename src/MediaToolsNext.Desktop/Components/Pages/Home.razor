@@ -4,70 +4,117 @@
 @inject IExternalToolProbe ToolProbe
 @inject IHardwareTuner HardwareTuner
 @inject IScanPreviewService PreviewService
+@inject ScanControl ScanControl
 
-<div class="scanner-shell">
-    <header>
+<div class="workspace">
+    <header class="workspace-header">
         <div>
+            <p class="eyebrow">Media integrity workspace</p>
             <h1>Media Tools Next</h1>
-            <p>Scan, classify, sort, and mirror media files with dry-run safety by default.</p>
+            <p class="subtitle">Preview first, scan safely, then sort and back up with resumable results.</p>
         </div>
-        <button disabled="@_running" @onclick="RunAsync">@(_running ? "Scanning..." : "Start scan")</button>
-        <button disabled="@_running" @onclick="PreviewAsync">Preview</button>
+        <div class="status-pill @RunStateClass" title="@RunStateHelp">@RunStateText</div>
     </header>
 
-    <section class="panel grid">
-        <label>Source <input @bind="_sourcePath" /></label>
-        <label>Target <input @bind="_targetRoot" /></label>
-        <label>Backup <input @bind="_backupRoot" /></label>
-        <label>Concurrency <input type="number" min="1" max="64" @bind="_concurrency" /></label>
-        <label>Mode
-            <select @bind="_mode">
-                <option value="@ScanActionMode.DryRun">Dry run</option>
-                <option value="@ScanActionMode.CopySorted">Copy sorted</option>
-                <option value="@ScanActionMode.CopySortedAndBackup">Copy sorted + backup</option>
-            </select>
-        </label>
-        <label>Profile
-            <select @bind="_profileName">
-                @foreach (var profile in ScanProfiles.All)
-                {
-                    <option value="@profile.Name">@profile.Name</option>
-                }
-            </select>
-        </label>
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="notice" title="Current workflow message">@_message</div>
+    }
+
+    <section class="steps" aria-label="Workflow">
+        <div class="step active"><strong>1</strong><span>Configure</span></div>
+        <div class="step @(_preview is not null ? "active" : "")"><strong>2</strong><span>Preview</span></div>
+        <div class="step @(_running || _summary is not null ? "active" : "")"><strong>3</strong><span>Scan</span></div>
+        <div class="step @(_summary is not null ? "active" : "")"><strong>4</strong><span>Review</span></div>
     </section>
 
-    <section class="panel tools">
-        @foreach (var tool in ToolProbe.GetStatuses())
+    <section class="panel">
+        <div class="section-title">
+            <div><h2>Scan setup</h2><p>Choose the source, destination, profile, and safety mode.</p></div>
+            <button class="secondary" disabled="@_running" @onclick="ApplyRecommendedSettings" title="Use hardware-aware defaults for this source and target.">Auto tune</button>
+        </div>
+        <div class="form-grid">
+            <label title="Folder to scan. Files are read only unless live copy mode is selected.">Source<input @bind="_sourcePath" /></label>
+            <label title="Where sorted output is written in live modes.">Target<input @bind="_targetRoot" /></label>
+            <label title="Optional mirror destination used by copy sorted + backup mode.">Backup<input @bind="_backupRoot" /></label>
+            <label title="Saved validator/category preset.">Profile
+                <select @bind="_profileName">
+                    @foreach (var profile in ScanProfiles.All)
+                    {
+                        <option value="@profile.Name">@profile.Name - @profile.Description</option>
+                    }
+                </select>
+            </label>
+            <label title="Dry run never copies files. Live modes write sorted output.">Mode
+                <select @bind="_mode">
+                    <option value="@ScanActionMode.DryRun">Dry run</option>
+                    <option value="@ScanActionMode.CopySorted">Copy sorted</option>
+                    <option value="@ScanActionMode.CopySortedAndBackup">Copy sorted + backup</option>
+                </select>
+            </label>
+            <label title="Parallel file validators. Use Auto tune if unsure.">Concurrency<input type="number" min="1" max="64" @bind="_concurrency" /></label>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="section-title">
+            <div><h2>Preflight</h2><p>Confirm tools, expected volume, and live-write risk before scanning.</p></div>
+            <button class="secondary" disabled="@_running" @onclick="PreviewAsync" title="Count matching files without validating or copying.">Preview</button>
+        </div>
+        <div class="tool-row">
+            @foreach (var tool in ToolProbe.GetStatuses())
+            {
+                <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.IsAvailable ? tool.Path : tool.Detail)">@tool.Name</span>
+            }
+        </div>
+        <div class="summary-grid">
+            <div title="Files discovered by the preview step."><strong>@(_preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
+            <div title="Estimated source bytes in preview."><strong>@PreviewMb</strong><span>Preview MB</span></div>
+            <div title="Hardware-aware recommendation based on CPU, memory, and drive layout."><strong>@(_hardware?.RecommendedConcurrency ?? _concurrency)</strong><span>Suggested threads</span></div>
+            <div title="Current validation profile."><strong>@ScanProfiles.Get(_profileName).ValidationDepth</strong><span>Depth</span></div>
+        </div>
+        @if (_mode != ScanActionMode.DryRun)
         {
-            <span class="tool @(tool.IsAvailable ? "ok" : "missing")">@tool.Name</span>
+            <label class="confirm-row" title="Required before live file copying can start.">
+                <input type="checkbox" @bind="_confirmedLiveMode" />
+                I understand this live mode will copy files into the target folder.
+            </label>
         }
     </section>
-    <section class="panel">Auto tuning: @_hardware?.Rationale; recommended concurrency @_hardware?.RecommendedConcurrency.</section>
-    <section class="panel">Preview: @_preview?.TotalFiles files, @((_preview?.TotalBytes ?? 0) / 1048576d).ToString("N1") MB.</section>
 
-    <section class="stats">
-        <strong>Total</strong><span>@_summary?.Total</span>
-        <strong>Valid</strong><span>@_summary?.Valid</span>
-        <strong>Corrupt</strong><span>@_summary?.Corrupt</span>
-        <strong>Unknown</strong><span>@_summary?.Unknown</span>
-        <strong>Errors</strong><span>@_summary?.Errors</span>
+    <section class="action-bar">
+        <button disabled="@StartDisabled" @onclick="RunAsync" title="@StartHelp">@(_running ? "Scanning..." : "Start scan")</button>
+        <button class="secondary" disabled="@(!_running || ScanControl.IsPaused)" @onclick="PauseScan" title="Pause before starting more queued file work.">Pause</button>
+        <button class="secondary" disabled="@(!_running || !ScanControl.IsPaused)" @onclick="ResumeScan" title="Resume a paused scan.">Resume</button>
+        <button class="danger" disabled="@(!_running)" @onclick="CancelScan" title="Cancel the current scan after in-flight work observes cancellation.">Cancel</button>
     </section>
-    <section class="stats">
-        <strong>Elapsed</strong><span>@_performance.Elapsed.ToString("hh\\:mm\\:ss")</span>
-        <strong>Files/s</strong><span>@_performance.FilesPerSecond.ToString("N1")</span>
-        <strong>MB/s</strong><span>@_performance.MegabytesPerSecond.ToString("N1")</span>
-        <strong>Processed</strong><span>@_performance.FilesProcessed</span>
-        <strong>MB</strong><span>@(_performance.BytesProcessed / 1048576d).ToString("N1")</span>
+
+    <section class="summary-grid">
+        <div><strong>@(_summary?.Total ?? _performance.FilesProcessed)</strong><span>Total</span></div>
+        <div><strong>@(_summary?.Valid ?? 0)</strong><span>Valid</span></div>
+        <div><strong>@(_summary?.Corrupt ?? 0)</strong><span>Corrupt</span></div>
+        <div><strong>@(_summary?.Unknown ?? 0)</strong><span>Unknown</span></div>
+        <div><strong>@(_summary?.Errors ?? 0)</strong><span>Errors</span></div>
+        <div><strong>@_performance.Elapsed.ToString("hh\\:mm\\:ss")</strong><span>Elapsed</span></div>
+        <div><strong>@_performance.FilesPerSecond.ToString("N1")</strong><span>Files/s</span></div>
+        <div><strong>@_performance.MegabytesPerSecond.ToString("N1")</strong><span>MB/s</span></div>
     </section>
 
     <section class="panel results">
+        <div class="section-title">
+            <div><h2>Recent results</h2><p>Latest 200 records, newest first.</p></div>
+        </div>
         <table>
             <thead><tr><th>Status</th><th>Category</th><th>Path</th><th>Detail</th></tr></thead>
             <tbody>
             @foreach (var row in _results.TakeLast(200).Reverse())
             {
-                <tr><td>@row.Status</td><td>@row.Candidate.Category</td><td>@row.Candidate.RelativePath</td><td>@row.Detail</td></tr>
+                <tr class="row-@row.Status.ToString().ToLowerInvariant()">
+                    <td>@row.Status</td>
+                    <td>@row.Candidate.Category</td>
+                    <td title="@row.Candidate.FullPath">@row.Candidate.RelativePath</td>
+                    <td>@row.Detail</td>
+                </tr>
             }
             </tbody>
         </table>
@@ -81,39 +128,95 @@
     private int _concurrency = Math.Max(1, Environment.ProcessorCount / 2);
     private ScanActionMode _mode = ScanActionMode.DryRun;
     private bool _running;
+    private bool _confirmedLiveMode;
+    private string? _message;
+    private CancellationTokenSource? _scanCts;
     private ScanSummary? _summary;
     private ScanPerformance _performance = new(TimeSpan.Zero, 0, 0);
     private ScanPreview? _preview;
+    private HardwareProfile? _hardware;
+    private string _profileName = ScanProfiles.FastDryRun.Name;
     private readonly List<ScanResultRecord> _results = [];
+
+    private string PreviewMb => ((_preview?.TotalBytes ?? 0) / 1048576d).ToString("N1");
+    private bool StartDisabled => _running || (_mode != ScanActionMode.DryRun && !_confirmedLiveMode);
+    private string StartHelp => StartDisabled && !_running ? "Confirm live mode before scanning." : "Run validation with the selected settings.";
+    private string RunStateText => _running ? (ScanControl.IsPaused ? "Paused" : "Running") : _summary is null ? "Ready" : "Complete";
+    private string RunStateClass => _running ? (ScanControl.IsPaused ? "paused" : "running") : _summary is null ? "ready" : "complete";
+    private string RunStateHelp => "Shows whether the scanner is ready, running, paused, or complete.";
+
+    private void ApplyRecommendedSettings()
+    {
+        _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
+        _concurrency = _hardware.RecommendedConcurrency;
+        _message = "Applied hardware-aware recommendations.";
+    }
+
+    private async Task PreviewAsync()
+    {
+        var options = BuildOptions();
+        _preview = await PreviewService.PreviewAsync(options, CancellationToken.None);
+        _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
+        _message = "Preview complete. Review counts before starting live modes.";
+    }
 
     private async Task RunAsync()
     {
         _running = true;
+        _message = "Scan started.";
         _summary = null;
+        _performance = new(TimeSpan.Zero, 0, 0);
         _results.Clear();
+        ScanControl.Resume();
+        _scanCts = new CancellationTokenSource();
         var metrics = new ScanPerformanceTracker();
-        var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
-        _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
-        var profile = ScanProfiles.Get(_profileName);
-        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
         var progress = new Progress<ScanResultRecord>(record =>
         {
             _results.Add(record);
             _performance = metrics.Add(record);
             InvokeAsync(StateHasChanged);
         });
-        try { _summary = await Pipeline.RunAsync(options, progress, CancellationToken.None); }
-        finally { _running = false; }
+
+        try
+        {
+            _summary = await Pipeline.RunAsync(BuildOptions(), progress, _scanCts.Token);
+            _message = "Scan complete.";
+        }
+        catch (OperationCanceledException)
+        {
+            _message = "Scan cancelled.";
+        }
+        finally
+        {
+            _running = false;
+            _scanCts?.Dispose();
+            _scanCts = null;
+            ScanControl.Resume();
+        }
     }
 
-    private async Task PreviewAsync()
+    private void PauseScan()
+    {
+        ScanControl.Pause();
+        _message = "Scan paused. In-flight files may finish before the pause is visible.";
+    }
+
+    private void ResumeScan()
+    {
+        ScanControl.Resume();
+        _message = "Scan resumed.";
+    }
+
+    private void CancelScan()
+    {
+        _scanCts?.Cancel();
+        _message = "Cancelling scan...";
+    }
+
+    private ScanOptions BuildOptions()
     {
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
         var profile = ScanProfiles.Get(_profileName);
-        var options = new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
-        _preview = await PreviewService.PreviewAsync(options, CancellationToken.None);
+        return new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
     }
-
-    private HardwareProfile? _hardware;
-    private string _profileName = ScanProfiles.FastDryRun.Name;
 }

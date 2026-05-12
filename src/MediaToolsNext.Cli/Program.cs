@@ -37,7 +37,8 @@ var pipeline = new ScannerPipeline(
     new FileDiscoverer(),
     new ValidatorRegistry([new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)]),
     new FileActionService(),
-    store);
+    store,
+    new ScanControl());
 
 var metrics = new ScanPerformanceTracker();
 var progress = new Progress<ScanResultRecord>(r =>

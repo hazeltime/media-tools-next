@@ -7,7 +7,8 @@ public sealed class ScannerPipeline(
     IFileDiscoverer discoverer,
     IValidatorRegistry validators,
     IFileActionService actions,
-    IScanStore store) : IScannerPipeline
+    IScanStore store,
+    ScanControl control) : IScannerPipeline
 {
     public async Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
     {
@@ -23,6 +24,7 @@ public sealed class ScannerPipeline(
             await throttler.WaitAsync(cancellationToken);
             try
             {
+                await control.WaitIfPausedAsync(cancellationToken);
                 var reusable = await store.FindReusableResultAsync(candidate, cancellationToken);
                 if (reusable is not null)
                 {

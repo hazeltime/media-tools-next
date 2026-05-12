@@ -9,6 +9,7 @@ public static class MediaToolsServices
     {
         services.AddSingleton<IExternalToolProbe, ExternalToolProbe>();
         services.AddSingleton<IHardwareTuner, HardwareTuner>();
+        services.AddSingleton<ScanControl>();
         services.AddSingleton<IFileDiscoverer, FileDiscoverer>();
         services.AddSingleton<IScanPreviewService, ScanPreviewService>();
         services.AddSingleton<IFileActionService, FileActionService>();
