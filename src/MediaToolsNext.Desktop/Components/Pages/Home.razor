@@ -5,13 +5,14 @@
 @inject IHardwareTuner HardwareTuner
 @inject IScanPreviewService PreviewService
 @inject ScanControl ScanControl
+@inject FolderPickerService FolderPicker
 
 <div class="workspace">
     <header class="workspace-header">
         <div>
             <p class="eyebrow">Media integrity workspace</p>
             <h1>Media Tools Next</h1>
-            <p class="subtitle">Preview first, scan safely, then sort and back up with resumable results.</p>
+            <p class="subtitle">Preview what will be scanned, validate safely, then optionally sort and mirror files.</p>
         </div>
         <div class="status-pill @RunStateClass" title="@RunStateHelp">@RunStateText</div>
     </header>
@@ -22,62 +23,114 @@
     }
 
     <section class="steps" aria-label="Workflow">
-        <div class="step active"><strong>1</strong><span>Configure</span></div>
+        <div class="step active"><strong>1</strong><span>Paths</span></div>
         <div class="step @(_preview is not null ? "active" : "")"><strong>2</strong><span>Preview</span></div>
         <div class="step @(_running || _summary is not null ? "active" : "")"><strong>3</strong><span>Scan</span></div>
         <div class="step @(_summary is not null ? "active" : "")"><strong>4</strong><span>Review</span></div>
     </section>
 
-    <section class="panel">
-        <div class="section-title">
-            <div><h2>Scan setup</h2><p>Choose the source, destination, profile, and safety mode.</p></div>
-            <button class="secondary" disabled="@_running" @onclick="ApplyRecommendedSettings" title="Use hardware-aware defaults for this source and target.">Auto tune</button>
-        </div>
-        <div class="form-grid">
-            <label title="Folder to scan. Files are read only unless live copy mode is selected.">Source<input @bind="_sourcePath" /></label>
-            <label title="Where sorted output is written in live modes.">Target<input @bind="_targetRoot" /></label>
-            <label title="Optional mirror destination used by copy sorted + backup mode.">Backup<input @bind="_backupRoot" /></label>
-            <label title="Saved validator/category preset.">Profile
-                <select @bind="_profileName">
-                    @foreach (var profile in ScanProfiles.All)
-                    {
-                        <option value="@profile.Name">@profile.Name - @profile.Description</option>
-                    }
-                </select>
-            </label>
-            <label title="Dry run never copies files. Live modes write sorted output.">Mode
-                <select @bind="_mode">
-                    <option value="@ScanActionMode.DryRun">Dry run</option>
-                    <option value="@ScanActionMode.CopySorted">Copy sorted</option>
-                    <option value="@ScanActionMode.CopySortedAndBackup">Copy sorted + backup</option>
-                </select>
-            </label>
-            <label title="Parallel file validators. Use Auto tune if unsure.">Concurrency<input type="number" min="1" max="64" @bind="_concurrency" /></label>
-        </div>
-    </section>
+    <div class="main-grid">
+        <section class="panel primary-panel">
+            <div class="section-title">
+                <div><h2>1. Paths</h2><p>Select the source folder and optional output locations.</p></div>
+                <button class="secondary" disabled="@_running" @onclick="ApplyRecommendedSettings" title="Analyze CPU, memory, and drive layout to pick sensible defaults.">Auto tune</button>
+            </div>
+
+            <div class="path-stack">
+                <label title="Folder to scan. The scanner reads from this location.">
+                    Source folder
+                    <div class="input-action"><input @bind="_sourcePath" /><button class="icon-button" @onclick="PickSourceAsync" title="Browse for source folder">Browse</button></div>
+                </label>
+                <label title="Destination used when a live copy mode is selected.">
+                    Target folder
+                    <div class="input-action"><input @bind="_targetRoot" /><button class="icon-button" @onclick="PickTargetAsync" title="Browse for target folder">Browse</button></div>
+                </label>
+                <label title="Optional mirror destination used only by copy sorted + backup mode.">
+                    Backup folder
+                    <div class="input-action"><input @bind="_backupRoot" /><button class="icon-button" @onclick="PickBackupAsync" title="Browse for backup folder">Browse</button></div>
+                </label>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-title">
+                <div><h2>2. Scan settings</h2><p>Choose what to scan and how strict validation should be.</p></div>
+            </div>
+
+            <div class="settings-grid">
+                <fieldset title="Profiles change categories, validation depth, and default behavior.">
+                    <legend>Profile</legend>
+                    <select @bind="_profileName" @bind:after="ApplyProfile">
+                        @foreach (var profile in ScanProfiles.All)
+                        {
+                            <option value="@profile.Name">@profile.Name - @profile.Description</option>
+                        }
+                    </select>
+                </fieldset>
+
+                <fieldset title="Dry run is read-only. Live modes copy files to the target folders.">
+                    <legend>Mode</legend>
+                    <label class="choice"><input type="radio" name="mode" checked="@(_mode == ScanActionMode.DryRun)" @onchange="@(() => _mode = ScanActionMode.DryRun)" /> Dry run</label>
+                    <label class="choice"><input type="radio" name="mode" checked="@(_mode == ScanActionMode.CopySorted)" @onchange="@(() => _mode = ScanActionMode.CopySorted)" /> Copy sorted</label>
+                    <label class="choice"><input type="radio" name="mode" checked="@(_mode == ScanActionMode.CopySortedAndBackup)" @onchange="@(() => _mode = ScanActionMode.CopySortedAndBackup)" /> Copy sorted + backup</label>
+                </fieldset>
+
+                <fieldset title="Categories control which file types are discovered.">
+                    <legend>Categories</legend>
+                    <label class="choice"><input type="checkbox" @bind="_enableImages" /> Images</label>
+                    <label class="choice"><input type="checkbox" @bind="_enableVideo" /> Video</label>
+                    <label class="choice"><input type="checkbox" @bind="_enableAudio" /> Audio</label>
+                    <label class="choice"><input type="checkbox" @bind="_enableDocuments" /> Documents</label>
+                </fieldset>
+
+                <fieldset title="Fast uses cheap checks. Deep runs more expensive validation where available.">
+                    <legend>Validation depth</legend>
+                    <label class="choice"><input type="radio" name="depth" checked="@(_validationDepth == ValidationDepth.Fast)" @onchange="@(() => _validationDepth = ValidationDepth.Fast)" /> Fast</label>
+                    <label class="choice"><input type="radio" name="depth" checked="@(_validationDepth == ValidationDepth.Standard)" @onchange="@(() => _validationDepth = ValidationDepth.Standard)" /> Standard</label>
+                    <label class="choice"><input type="radio" name="depth" checked="@(_validationDepth == ValidationDepth.Deep)" @onchange="@(() => _validationDepth = ValidationDepth.Deep)" /> Deep</label>
+                </fieldset>
+
+                <label title="Number of files validated in parallel. Higher is faster until CPU or disk becomes saturated.">
+                    Concurrency: @_concurrency
+                    <input type="range" min="1" max="32" step="1" @bind="_concurrency" />
+                </label>
+
+                <label title="Seconds of media stream to inspect in standard/deep checks.">
+                    Media probe seconds
+                    <input type="number" min="10" max="600" step="10" @bind="_probeSeconds" />
+                </label>
+            </div>
+        </section>
+    </div>
 
     <section class="panel">
         <div class="section-title">
-            <div><h2>Preflight</h2><p>Confirm tools, expected volume, and live-write risk before scanning.</p></div>
-            <button class="secondary" disabled="@_running" @onclick="PreviewAsync" title="Count matching files without validating or copying.">Preview</button>
+            <div>
+                <h2>3. Preview and preflight</h2>
+                <p>Preview only counts matching files and estimates size. It does not validate, copy, move, or modify files.</p>
+            </div>
+            <button class="secondary" disabled="@_running" @onclick="PreviewAsync" title="Count matching files before running validation.">Run preview</button>
         </div>
+
         <div class="tool-row">
             @foreach (var tool in ToolProbe.GetStatuses())
             {
                 <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.IsAvailable ? tool.Path : tool.Detail)">@tool.Name</span>
             }
         </div>
+
         <div class="summary-grid">
-            <div title="Files discovered by the preview step."><strong>@(_preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
-            <div title="Estimated source bytes in preview."><strong>@PreviewMb</strong><span>Preview MB</span></div>
-            <div title="Hardware-aware recommendation based on CPU, memory, and drive layout."><strong>@(_hardware?.RecommendedConcurrency ?? _concurrency)</strong><span>Suggested threads</span></div>
-            <div title="Current validation profile."><strong>@ScanProfiles.Get(_profileName).ValidationDepth</strong><span>Depth</span></div>
+            <div><strong>@(_preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
+            <div><strong>@PreviewMb</strong><span>Preview MB</span></div>
+            <div><strong>@(_hardware?.RecommendedConcurrency ?? _concurrency)</strong><span>Suggested threads</span></div>
+            <div><strong>@_validationDepth</strong><span>Depth</span></div>
         </div>
+
         @if (_mode != ScanActionMode.DryRun)
         {
-            <label class="confirm-row" title="Required before live file copying can start.">
+            <label class="confirm-row" title="Required because live modes write copied files into target folders.">
                 <input type="checkbox" @bind="_confirmedLiveMode" />
-                I understand this live mode will copy files into the target folder.
+                I understand this live mode will copy files into the selected target folder.
             </label>
         }
     </section>
@@ -86,7 +139,7 @@
         <button disabled="@StartDisabled" @onclick="RunAsync" title="@StartHelp">@(_running ? "Scanning..." : "Start scan")</button>
         <button class="secondary" disabled="@(!_running || ScanControl.IsPaused)" @onclick="PauseScan" title="Pause before starting more queued file work.">Pause</button>
         <button class="secondary" disabled="@(!_running || !ScanControl.IsPaused)" @onclick="ResumeScan" title="Resume a paused scan.">Resume</button>
-        <button class="danger" disabled="@(!_running)" @onclick="CancelScan" title="Cancel the current scan after in-flight work observes cancellation.">Cancel</button>
+        <button class="danger" disabled="@(!_running)" @onclick="CancelScan" title="Cancel the current scan.">Cancel</button>
     </section>
 
     <section class="summary-grid">
@@ -102,7 +155,7 @@
 
     <section class="panel results">
         <div class="section-title">
-            <div><h2>Recent results</h2><p>Latest 200 records, newest first.</p></div>
+            <div><h2>4. Results</h2><p>Latest 200 records, newest first.</p></div>
         </div>
         <table>
             <thead><tr><th>Status</th><th>Category</th><th>Path</th><th>Detail</th></tr></thead>
@@ -119,6 +172,16 @@
             </tbody>
         </table>
     </section>
+
+    <section class="panel help-panel">
+        <div class="section-title">
+            <div><h2>Help and FAQ</h2><p>Short answers for the normal workflow.</p></div>
+        </div>
+        <details open><summary>What does preview do?</summary><p>Preview walks the source folder and counts files that match the enabled categories. It estimates size only. It does not validate, copy, move, or change files.</p></details>
+        <details><summary>What is the safest mode?</summary><p>Dry run. It validates files and records results without writing sorted output.</p></details>
+        <details><summary>When should I use deep validation?</summary><p>Use deep validation when accuracy matters more than speed. It can run slower external checks such as media decode probes.</p></details>
+        <details><summary>How do pause and resume work?</summary><p>Pause stops new queued work from starting. Files already being processed may finish. Resume continues from the queue.</p></details>
+    </section>
 </div>
 
 @code {
@@ -126,7 +189,13 @@
     private string _targetRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "_media_tools_next");
     private string? _backupRoot;
     private int _concurrency = Math.Max(1, Environment.ProcessorCount / 2);
+    private int _probeSeconds = 60;
     private ScanActionMode _mode = ScanActionMode.DryRun;
+    private ValidationDepth _validationDepth = ValidationDepth.Fast;
+    private bool _enableImages = true;
+    private bool _enableVideo = true;
+    private bool _enableAudio = true;
+    private bool _enableDocuments = true;
     private bool _running;
     private bool _confirmedLiveMode;
     private string? _message;
@@ -145,6 +214,23 @@
     private string RunStateClass => _running ? (ScanControl.IsPaused ? "paused" : "running") : _summary is null ? "ready" : "complete";
     private string RunStateHelp => "Shows whether the scanner is ready, running, paused, or complete.";
 
+    private async Task PickSourceAsync() => _sourcePath = await PickAsync("Select source folder", _sourcePath) ?? _sourcePath;
+    private async Task PickTargetAsync() => _targetRoot = await PickAsync("Select target folder", _targetRoot) ?? _targetRoot;
+    private async Task PickBackupAsync() => _backupRoot = await PickAsync("Select backup folder", _backupRoot) ?? _backupRoot;
+    private Task<string?> PickAsync(string title, string? path) => FolderPicker.PickFolderAsync(title, path);
+
+    private void ApplyProfile()
+    {
+        var profile = ScanProfiles.Get(_profileName);
+        _mode = profile.DefaultActionMode;
+        _enableImages = profile.EnableImages;
+        _enableVideo = profile.EnableVideo;
+        _enableAudio = profile.EnableAudio;
+        _enableDocuments = profile.EnableDocuments;
+        _probeSeconds = profile.MediaProbeSeconds;
+        _validationDepth = profile.ValidationDepth;
+    }
+
     private void ApplyRecommendedSettings()
     {
         _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
@@ -154,8 +240,7 @@
 
     private async Task PreviewAsync()
     {
-        var options = BuildOptions();
-        _preview = await PreviewService.PreviewAsync(options, CancellationToken.None);
+        _preview = await PreviewService.PreviewAsync(BuildOptions(), CancellationToken.None);
         _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
         _message = "Preview complete. Review counts before starting live modes.";
     }
@@ -216,7 +301,6 @@
     private ScanOptions BuildOptions()
     {
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
-        var profile = ScanProfiles.Get(_profileName);
-        return new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, _concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
+        return new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, _enableImages, _enableVideo, _enableAudio, _enableDocuments, _concurrency, _probeSeconds, db, _validationDepth);
     }
 }

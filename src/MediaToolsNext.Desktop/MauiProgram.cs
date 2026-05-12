@@ -13,6 +13,7 @@ public static class MauiProgram
             .ConfigureFonts(fonts => fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular"));
 
         builder.Services.AddMauiBlazorWebView();
+        builder.Services.AddSingleton<FolderPickerService>();
         builder.Services.AddMediaToolsNext(_ =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db"));
 
@@ -24,4 +25,3 @@ public static class MauiProgram
         return builder.Build();
     }
 }
-
