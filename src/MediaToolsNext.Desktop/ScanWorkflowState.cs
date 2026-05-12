@@ -19,7 +19,7 @@ public sealed class ScanWorkflowState
     public int Concurrency { get; set; } = 4;
     public int ProbeSeconds { get; set; } = 10;
     public int ToolTimeoutSeconds { get; set; } = 60;
-    public int MaxRuntimeSeconds { get; set; } = 30;
+    public int MaxRuntimeSeconds { get; set; } = 60;
     public int MaxMatchedFiles { get; set; } = 10000;
     public int MaxMatchedMb { get; set; } = 10240;
     public int MinFileKb { get; set; } = 10;
