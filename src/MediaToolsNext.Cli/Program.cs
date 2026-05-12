@@ -23,7 +23,29 @@ foreach (var tool in tools.GetStatuses())
     Console.WriteLine($"- {tool.Name}: {(tool.IsAvailable ? tool.Path : "missing")}");
 
 Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={tuning.RecommendedProbeSeconds}, buffer={tuning.RecommendedCopyBufferBytes}, {tuning.Rationale}");
-var options = new ScanOptions(source, target, backup, mode, profile.EnableImages, profile.EnableVideo, profile.EnableAudio, profile.EnableDocuments, concurrency, profile.MediaProbeSeconds, db, profile.ValidationDepth);
+var options = new ScanOptions(
+    source,
+    target,
+    backup,
+    mode,
+    profile.EnableImages,
+    profile.EnableVideo,
+    profile.EnableAudio,
+    profile.EnableDocuments,
+    concurrency,
+    profile.MediaProbeSeconds,
+    db,
+    profile.ValidationDepth,
+    MaxSearchedFiles: IntAfter("--max-searched-files"),
+    MaxMatchedFiles: IntAfter("--max-matched-files"),
+    MaxSearchedDirectories: IntAfter("--max-searched-dirs"),
+    MaxMatchedDirectories: IntAfter("--max-matched-dirs"),
+    MinRuntimeBeforeLimitsSeconds: IntAfter("--min-runtime-seconds") ?? 0,
+    MinScannedBytes: MbAfter("--min-scanned-mb"),
+    MaxScannedBytes: MbAfter("--max-scanned-mb"),
+    MinMatchedBytes: MbAfter("--min-matched-mb"),
+    MaxMatchedBytes: MbAfter("--max-matched-mb"),
+    ExternalToolTimeoutSeconds: IntAfter("--tool-timeout-seconds") ?? 20);
 if (args.Contains("--preview"))
 {
     var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
@@ -60,3 +82,6 @@ string? ValueAfter(string name)
     var index = Array.IndexOf(args, name);
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
 }
+
+int? IntAfter(string name) => int.TryParse(ValueAfter(name), out var value) && value > 0 ? value : null;
+long? MbAfter(string name) => IntAfter(name) is int value ? value * 1048576L : null;

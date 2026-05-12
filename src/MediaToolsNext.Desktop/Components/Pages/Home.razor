@@ -105,14 +105,49 @@
                     <input type="number" min="5" max="600" step="5" @bind="_toolTimeoutSeconds" />
                 </label>
 
-                <label title="Optional safety cap for huge trees. Use 0 for unlimited.">
-                    Max files
-                    <input type="number" min="0" step="1000" @bind="_maxFiles" />
+                <label title="Minimum runtime before configured max limits are allowed to stop discovery. Useful for very large trees where you want at least some warm-up time. Use 0 for immediate limits.">
+                    Min runtime before limits stop scan (seconds)
+                    <input type="number" min="0" step="5" @bind="_minRuntimeBeforeLimitsSeconds" />
                 </label>
 
-                <label title="Optional safety cap for directory traversal. Use 0 for unlimited.">
-                    Max directories
-                    <input type="number" min="0" step="100" @bind="_maxDirectories" />
+                <label title="Maximum number of filesystem entries inspected, including unsupported file types. Use 0 for unlimited.">
+                    Max searched files
+                    <input type="number" min="0" step="1000" @bind="_maxSearchedFiles" />
+                </label>
+
+                <label title="Maximum number of matching enabled-category files yielded to preview/scan. Use 0 for unlimited.">
+                    Max matched files
+                    <input type="number" min="0" step="1000" @bind="_maxMatchedFiles" />
+                </label>
+
+                <label title="Maximum number of folders visited during traversal. Use 0 for unlimited.">
+                    Max searched directories
+                    <input type="number" min="0" step="100" @bind="_maxSearchedDirectories" />
+                </label>
+
+                <label title="Maximum number of folders that contain at least one matching enabled-category file. Use 0 for unlimited.">
+                    Max matched directories
+                    <input type="number" min="0" step="100" @bind="_maxMatchedDirectories" />
+                </label>
+
+                <label title="Minimum total searched data before max limits can stop discovery. Use 0 for no minimum.">
+                    Min scanned MB before limits
+                    <input type="number" min="0" step="100" @bind="_minScannedMb" />
+                </label>
+
+                <label title="Maximum total searched data across all inspected files. Use 0 for unlimited.">
+                    Max scanned MB
+                    <input type="number" min="0" step="100" @bind="_maxScannedMb" />
+                </label>
+
+                <label title="Minimum matching data before max limits can stop discovery. Use 0 for no minimum.">
+                    Min matched MB before limits
+                    <input type="number" min="0" step="100" @bind="_minMatchedMb" />
+                </label>
+
+                <label title="Maximum matching data from enabled categories. Use 0 for unlimited.">
+                    Max matched MB
+                    <input type="number" min="0" step="100" @bind="_maxMatchedMb" />
                 </label>
             </div>
         </section>
@@ -198,7 +233,8 @@
         <details><summary>What does Auto tune do?</summary><p>Auto tune reads CPU count, memory, source drive type, target drive type, and whether source and target share a drive. It then recommends concurrency and buffer/probe defaults.</p></details>
         <details><summary>Profile differences</summary><p>Fast favors speed and low overhead. Deep sort favors stricter validation and sorted output. Photos scans images only. Video scans video and audio only.</p></details>
         <details><summary>Mode differences</summary><p>Dry run is read-only. Copy sorted writes categorized copies into target. Copy sorted + backup writes target copies and mirrors them into backup.</p></details>
-        <details><summary>Concurrency and limits</summary><p>Concurrency controls parallel validators. Max files and max directories cap huge scans. Tool timeout prevents external tools from hanging too long.</p></details>
+        <details><summary>Search limits vs matched limits</summary><p>Searched limits count everything the traversal inspects. Matched limits count only enabled media categories. Directory limits work the same way: searched directories are visited folders, matched directories are folders that contain at least one matching file.</p></details>
+        <details><summary>Minimum runtime and data limits</summary><p>Minimum runtime and minimum MB settings delay max-limit stopping until enough time or data has been inspected. Max scanned MB applies to all searched files. Max matched MB applies only to matching enabled-category files.</p></details>
         <details><summary>What is the safest mode?</summary><p>Dry run. It validates files and records results without writing sorted output.</p></details>
         <details><summary>When should I use deep validation?</summary><p>Use deep validation when accuracy matters more than speed. It can run slower external checks such as media decode probes.</p></details>
         <details><summary>How do pause and resume work?</summary><p>Pause stops new queued work from starting. Files already being processed may finish. Resume continues from the queue.</p></details>
@@ -212,8 +248,15 @@
     private int _concurrency = 4;
     private int _probeSeconds = 10;
     private int _toolTimeoutSeconds = 30;
-    private int _maxFiles = 100;
-    private int _maxDirectories = 1000;
+    private int _maxMatchedFiles = 100;
+    private int _maxSearchedFiles;
+    private int _maxSearchedDirectories = 1000;
+    private int _maxMatchedDirectories;
+    private int _minRuntimeBeforeLimitsSeconds;
+    private int _minScannedMb;
+    private int _maxScannedMb;
+    private int _minMatchedMb;
+    private int _maxMatchedMb;
     private ScanActionMode _mode = ScanActionMode.DryRun;
     private ValidationDepth _validationDepth = ValidationDepth.Fast;
     private bool _enableImages = true;
@@ -340,8 +383,31 @@
     private ScanOptions BuildOptions()
     {
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
-        return new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, _enableImages, _enableVideo, _enableAudio, _enableDocuments, _concurrency, _probeSeconds, db, _validationDepth, MaxFiles: ZeroAsNull(_maxFiles), MaxDirectories: ZeroAsNull(_maxDirectories), ExternalToolTimeoutSeconds: _toolTimeoutSeconds);
+        return new ScanOptions(
+            _sourcePath,
+            _targetRoot,
+            string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot,
+            _mode,
+            _enableImages,
+            _enableVideo,
+            _enableAudio,
+            _enableDocuments,
+            _concurrency,
+            _probeSeconds,
+            db,
+            _validationDepth,
+            MaxMatchedFiles: ZeroAsNull(_maxMatchedFiles),
+            MaxSearchedFiles: ZeroAsNull(_maxSearchedFiles),
+            MaxSearchedDirectories: ZeroAsNull(_maxSearchedDirectories),
+            MaxMatchedDirectories: ZeroAsNull(_maxMatchedDirectories),
+            MinRuntimeBeforeLimitsSeconds: _minRuntimeBeforeLimitsSeconds,
+            MinScannedBytes: MbAsBytes(_minScannedMb),
+            MaxScannedBytes: MbAsBytes(_maxScannedMb),
+            MinMatchedBytes: MbAsBytes(_minMatchedMb),
+            MaxMatchedBytes: MbAsBytes(_maxMatchedMb),
+            ExternalToolTimeoutSeconds: _toolTimeoutSeconds);
     }
 
     private static int? ZeroAsNull(int value) => value <= 0 ? null : value;
+    private static long? MbAsBytes(int value) => value <= 0 ? null : value * 1048576L;
 }

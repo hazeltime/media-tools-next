@@ -16,7 +16,16 @@ public sealed record ScanOptions(
     int MaxRetries = 1,
     int? MaxFiles = null,
     int? MaxDirectories = null,
-    int ExternalToolTimeoutSeconds = 20)
+    int ExternalToolTimeoutSeconds = 20,
+    int? MaxSearchedFiles = null,
+    int? MaxMatchedFiles = null,
+    int? MaxSearchedDirectories = null,
+    int? MaxMatchedDirectories = null,
+    int MinRuntimeBeforeLimitsSeconds = 0,
+    long? MinScannedBytes = null,
+    long? MaxScannedBytes = null,
+    long? MinMatchedBytes = null,
+    long? MaxMatchedBytes = null)
 {
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
         new(

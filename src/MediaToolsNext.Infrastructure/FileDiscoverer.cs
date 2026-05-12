@@ -17,17 +17,24 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
         var pending = new Queue<string>();
         pending.Enqueue(source);
-        var visitedDirs = 0;
-        var yieldedFiles = 0;
+        var started = DateTimeOffset.UtcNow;
+        var searchedDirs = 0;
+        var searchedFiles = 0;
+        var matchedFiles = 0;
+        var scannedBytes = 0L;
+        var matchedBytes = 0L;
+        var matchedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var maxSearchedDirs = options.MaxSearchedDirectories ?? options.MaxDirectories;
+        var maxMatchedFiles = options.MaxMatchedFiles ?? options.MaxFiles;
 
         while (pending.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (options.MaxDirectories is int maxDirs && visitedDirs >= maxDirs)
+            if (LimitsActive() && maxSearchedDirs is int maxDirs && searchedDirs >= maxDirs)
                 yield break;
 
             var current = pending.Dequeue();
-            visitedDirs++;
+            searchedDirs++;
 
             foreach (var dir in SafeEnumerateDirectories(current))
             {
@@ -37,18 +44,26 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
             foreach (var file in SafeEnumerateFiles(current))
             {
-                var ext = Path.GetExtension(file).ToLowerInvariant();
-                var category = SupportedMedia.GetCategory(ext);
-                if (category == MediaCategory.Unknown || !IsEnabled(category, options))
-                    continue;
-                if (options.MaxFiles is int maxFiles && yieldedFiles >= maxFiles)
-                    yield break;
-
                 FileInfo info;
                 try { info = new FileInfo(file); }
                 catch { continue; }
 
-                yieldedFiles++;
+                searchedFiles++;
+                scannedBytes += info.Exists ? info.Length : 0;
+                if (LimitsActive() && ShouldStopBeforeNextMatch())
+                    yield break;
+
+                var ext = Path.GetExtension(file).ToLowerInvariant();
+                var category = SupportedMedia.GetCategory(ext);
+                if (category == MediaCategory.Unknown || !IsEnabled(category, options))
+                    continue;
+
+                matchedFiles++;
+                matchedBytes += info.Exists ? info.Length : 0;
+                var matchDir = Path.GetDirectoryName(info.FullName);
+                if (!string.IsNullOrWhiteSpace(matchDir))
+                    matchedDirs.Add(matchDir);
+
                 yield return new FileCandidate(
                     info.FullName,
                     Path.GetRelativePath(source, info.FullName),
@@ -58,6 +73,24 @@ public sealed class FileDiscoverer : IFileDiscoverer
                     info.Exists ? info.LastWriteTimeUtc : DateTimeOffset.MinValue);
                 await Task.Yield();
             }
+        }
+
+        bool LimitsActive()
+        {
+            var runtimeOk = (DateTimeOffset.UtcNow - started).TotalSeconds >= Math.Max(0, options.MinRuntimeBeforeLimitsSeconds);
+            var minScannedOk = options.MinScannedBytes is not long minScanned || scannedBytes >= minScanned;
+            var minMatchedOk = options.MinMatchedBytes is not long minMatched || matchedBytes >= minMatched;
+            return runtimeOk && minScannedOk && minMatchedOk;
+        }
+
+        bool ShouldStopBeforeNextMatch()
+        {
+            if (options.MaxSearchedFiles is int maxSearchedFiles && searchedFiles > maxSearchedFiles) return true;
+            if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes) return true;
+            if (maxMatchedFiles is int maxFiles && matchedFiles >= maxFiles) return true;
+            if (options.MaxMatchedDirectories is int maxMatchedDirs && matchedDirs.Count >= maxMatchedDirs) return true;
+            if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes >= maxMatchedBytes) return true;
+            return false;
         }
     }
 
