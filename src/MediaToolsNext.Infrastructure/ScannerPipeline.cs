@@ -5,12 +5,10 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class ScannerPipeline(
     IFileDiscoverer discoverer,
-    IEnumerable<IMediaValidator> validators,
+    IValidatorRegistry validators,
     IFileActionService actions,
     IScanStore store) : IScannerPipeline
 {
-    private readonly IReadOnlyDictionary<MediaCategory, IMediaValidator> _validators = validators.ToDictionary(x => x.Category);
-
     public async Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
     {
         await store.InitializeAsync(cancellationToken);
@@ -34,7 +32,8 @@ public sealed class ScannerPipeline(
                     return;
                 }
 
-                var outcome = _validators.TryGetValue(candidate.Category, out var validator)
+                var validator = validators.GetValidator(candidate.Category);
+                var outcome = validator is not null
                     ? await ValidateWithRetryAsync(validator, candidate, options, cancellationToken)
                     : new ValidationOutcome(candidate, ValidationStatus.Skipped, "none", "category_disabled", TimeSpan.Zero);
                 var action = await ApplyWithRetryAsync(outcome, options, cancellationToken);

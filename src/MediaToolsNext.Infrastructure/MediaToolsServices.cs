@@ -17,6 +17,7 @@ public static class MediaToolsServices
         services.AddSingleton<IMediaValidator>(sp => new MediaStreamValidator(MediaCategory.Video, sp.GetRequiredService<IExternalToolProbe>()));
         services.AddSingleton<IMediaValidator>(sp => new MediaStreamValidator(MediaCategory.Audio, sp.GetRequiredService<IExternalToolProbe>()));
         services.AddSingleton<IMediaValidator, DocumentValidator>();
+        services.AddSingleton<IValidatorRegistry, ValidatorRegistry>();
         services.AddSingleton<IScanStore>(sp => new SqliteScanStore(databasePath(sp)));
         services.AddSingleton<IScannerPipeline, ScannerPipeline>();
         return services;

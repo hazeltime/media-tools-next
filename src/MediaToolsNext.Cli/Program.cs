@@ -35,7 +35,7 @@ if (args.Contains("--preview"))
 var store = new SqliteScanStore(db);
 var pipeline = new ScannerPipeline(
     new FileDiscoverer(),
-    [new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)],
+    new ValidatorRegistry([new ImageValidator(tools), new MediaStreamValidator(MediaCategory.Video, tools), new MediaStreamValidator(MediaCategory.Audio, tools), new DocumentValidator(tools)]),
     new FileActionService(),
     store);
 

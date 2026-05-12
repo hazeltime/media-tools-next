@@ -11,6 +11,12 @@ public interface IMediaValidator
     Task<ValidationOutcome> ValidateAsync(FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken);
 }
 
+public interface IValidatorRegistry
+{
+    IReadOnlyCollection<MediaCategory> Categories { get; }
+    IMediaValidator? GetValidator(MediaCategory category);
+}
+
 public interface IFileActionService
 {
     Task<FileActionOutcome> ApplyAsync(ValidationOutcome outcome, ScanOptions options, CancellationToken cancellationToken);
