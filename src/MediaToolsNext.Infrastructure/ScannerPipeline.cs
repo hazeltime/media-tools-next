@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using System.Threading.Channels;
 using MediaToolsNext.Core;
 
 namespace MediaToolsNext.Infrastructure;
@@ -14,43 +14,60 @@ public sealed class ScannerPipeline(
     {
         await store.InitializeAsync(cancellationToken);
         var sessionId = await store.CreateSessionAsync(options, cancellationToken);
-        var candidates = new List<FileCandidate>();
-        await foreach (var candidate in discoverer.DiscoverAsync(options, cancellationToken))
-            candidates.Add(candidate);
-
-        using var throttler = new SemaphoreSlim(Math.Max(1, options.MaxConcurrency));
-        var tasks = candidates.Select(async candidate =>
+        var channel = Channel.CreateBounded<FileCandidate>(new BoundedChannelOptions(Math.Max(16, options.MaxConcurrency * 4))
         {
-            await throttler.WaitAsync(cancellationToken);
-            try
-            {
-                await control.WaitIfPausedAsync(cancellationToken);
-                var reusable = await store.FindReusableResultAsync(candidate, cancellationToken);
-                if (reusable is not null)
-                {
-                    var resumed = new ScanResultRecord(sessionId, candidate, ValidationStatus.Skipped, reusable.Validator, "resume_unchanged: " + reusable.Status, "skipped", null, null, DateTimeOffset.UtcNow);
-                    await store.SaveResultAsync(resumed, cancellationToken);
-                    progress?.Report(resumed);
-                    return;
-                }
-
-                var validator = validators.GetValidator(candidate.Category);
-                var outcome = validator is not null
-                    ? await ValidateWithRetryAsync(validator, candidate, options, cancellationToken)
-                    : new ValidationOutcome(candidate, ValidationStatus.Skipped, "none", "category_disabled", TimeSpan.Zero);
-                var action = await ApplyWithRetryAsync(outcome, options, cancellationToken);
-                var record = new ScanResultRecord(sessionId, candidate, outcome.Status, outcome.Validator, outcome.Detail, action.Action, action.PrimaryTargetPath, action.BackupTargetPath, DateTimeOffset.UtcNow);
-                await store.SaveResultAsync(record, cancellationToken);
-                progress?.Report(record);
-            }
-            finally
-            {
-                throttler.Release();
-            }
+            SingleWriter = true,
+            SingleReader = false,
+            FullMode = BoundedChannelFullMode.Wait
         });
 
-        await Task.WhenAll(tasks);
+        var producer = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var candidate in discoverer.DiscoverAsync(options, cancellationToken))
+                    await channel.Writer.WriteAsync(candidate, cancellationToken);
+                channel.Writer.TryComplete();
+            }
+            catch (Exception ex)
+            {
+                channel.Writer.TryComplete(ex);
+            }
+        }, cancellationToken);
+
+        var workers = Enumerable.Range(0, Math.Max(1, options.MaxConcurrency)).Select(_ => Task.Run(async () =>
+        {
+            await foreach (var candidate in channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                await control.WaitIfPausedAsync(cancellationToken);
+                await ProcessCandidateAsync(sessionId, candidate, options, progress, cancellationToken);
+            }
+        }, cancellationToken)).ToArray();
+
+        await producer;
+        await Task.WhenAll(workers);
         return await store.GetSummaryAsync(sessionId, cancellationToken);
+    }
+
+    private async Task ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
+    {
+        var reusable = await store.FindReusableResultAsync(candidate, cancellationToken);
+        if (reusable is not null)
+        {
+            var resumed = new ScanResultRecord(sessionId, candidate, ValidationStatus.Skipped, reusable.Validator, "resume_unchanged: " + reusable.Status, "skipped", null, null, DateTimeOffset.UtcNow);
+            await store.SaveResultAsync(resumed, cancellationToken);
+            progress?.Report(resumed);
+            return;
+        }
+
+        var validator = validators.GetValidator(candidate.Category);
+        var outcome = validator is not null
+            ? await ValidateWithRetryAsync(validator, candidate, options, cancellationToken)
+            : new ValidationOutcome(candidate, ValidationStatus.Skipped, "none", "category_disabled", TimeSpan.Zero);
+        var action = await ApplyWithRetryAsync(outcome, options, cancellationToken);
+        var record = new ScanResultRecord(sessionId, candidate, outcome.Status, outcome.Validator, outcome.Detail, action.Action, action.PrimaryTargetPath, action.BackupTargetPath, DateTimeOffset.UtcNow);
+        await store.SaveResultAsync(record, cancellationToken);
+        progress?.Report(record);
     }
 
     private static async Task<ValidationOutcome> ValidateWithRetryAsync(IMediaValidator validator, FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)

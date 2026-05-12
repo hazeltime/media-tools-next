@@ -40,6 +40,11 @@ label {
     font-size: 13px;
 }
 
+small {
+    color: #53606d;
+    font-weight: 500;
+}
+
 fieldset {
     border: 1px solid #d9e1e7;
     border-radius: 8px;

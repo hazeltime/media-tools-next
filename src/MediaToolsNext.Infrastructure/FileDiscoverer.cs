@@ -17,11 +17,17 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
         var pending = new Queue<string>();
         pending.Enqueue(source);
+        var visitedDirs = 0;
+        var yieldedFiles = 0;
 
         while (pending.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (options.MaxDirectories is int maxDirs && visitedDirs >= maxDirs)
+                yield break;
+
             var current = pending.Dequeue();
+            visitedDirs++;
 
             foreach (var dir in SafeEnumerateDirectories(current))
             {
@@ -35,11 +41,14 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 var category = SupportedMedia.GetCategory(ext);
                 if (category == MediaCategory.Unknown || !IsEnabled(category, options))
                     continue;
+                if (options.MaxFiles is int maxFiles && yieldedFiles >= maxFiles)
+                    yield break;
 
                 FileInfo info;
                 try { info = new FileInfo(file); }
                 catch { continue; }
 
+                yieldedFiles++;
                 yield return new FileCandidate(
                     info.FullName,
                     Path.GetRelativePath(source, info.FullName),
@@ -73,4 +82,3 @@ public sealed class FileDiscoverer : IFileDiscoverer
         catch { return []; }
     }
 }
-

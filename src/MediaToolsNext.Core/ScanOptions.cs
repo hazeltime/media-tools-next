@@ -13,7 +13,10 @@ public sealed record ScanOptions(
     int MediaProbeSeconds,
     string DatabasePath,
     ValidationDepth ValidationDepth = ValidationDepth.Standard,
-    int MaxRetries = 1)
+    int MaxRetries = 1,
+    int? MaxFiles = null,
+    int? MaxDirectories = null,
+    int ExternalToolTimeoutSeconds = 20)
 {
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
         new(

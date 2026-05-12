@@ -32,21 +32,21 @@
     <div class="main-grid">
         <section class="panel primary-panel">
             <div class="section-title">
-                <div><h2>1. Paths</h2><p>Select the source folder and optional output locations.</p></div>
+            <div><h2>1. Paths</h2><p>Source is only read. Target receives sorted output. Backup receives a second mirror copy when enabled.</p></div>
                 <button class="secondary" disabled="@_running" @onclick="ApplyRecommendedSettings" title="Analyze CPU, memory, and drive layout to pick sensible defaults.">Auto tune</button>
             </div>
 
             <div class="path-stack">
                 <label title="Folder to scan. The scanner reads from this location.">
-                    Source folder
+                    Source folder <small>Original files are discovered and validated here.</small>
                     <div class="input-action"><input @bind="_sourcePath" /><button class="icon-button" @onclick="PickSourceAsync" title="Browse for source folder">Browse</button></div>
                 </label>
                 <label title="Destination used when a live copy mode is selected.">
-                    Target folder
+                    Target folder <small>Live modes copy sorted results here under status folders.</small>
                     <div class="input-action"><input @bind="_targetRoot" /><button class="icon-button" @onclick="PickTargetAsync" title="Browse for target folder">Browse</button></div>
                 </label>
                 <label title="Optional mirror destination used only by copy sorted + backup mode.">
-                    Backup folder
+                    Backup folder <small>Optional second copy location for redundancy.</small>
                     <div class="input-action"><input @bind="_backupRoot" /><button class="icon-button" @onclick="PickBackupAsync" title="Browse for backup folder">Browse</button></div>
                 </label>
             </div>
@@ -54,11 +54,11 @@
 
         <section class="panel">
             <div class="section-title">
-                <div><h2>2. Scan settings</h2><p>Choose what to scan and how strict validation should be.</p></div>
+            <div><h2>2. Scan settings</h2><p>Profiles set good defaults; advanced controls let you override scan categories, limits, depth, and external tool timeouts.</p></div>
             </div>
 
             <div class="settings-grid">
-                <fieldset title="Profiles change categories, validation depth, and default behavior.">
+                <fieldset title="Fast: lowest overhead. Deep sort: stricter checks and copy-ready defaults. Photos: images only. Video: video/audio only.">
                     <legend>Profile</legend>
                     <select @bind="_profileName" @bind:after="ApplyProfile">
                         @foreach (var profile in ScanProfiles.All)
@@ -68,7 +68,7 @@
                     </select>
                 </fieldset>
 
-                <fieldset title="Dry run is read-only. Live modes copy files to the target folders.">
+                <fieldset title="Dry run validates only. Copy sorted writes to target. Copy sorted + backup also mirrors target output to backup.">
                     <legend>Mode</legend>
                     <label class="choice"><input type="radio" name="mode" checked="@(_mode == ScanActionMode.DryRun)" @onchange="@(() => _mode = ScanActionMode.DryRun)" /> Dry run</label>
                     <label class="choice"><input type="radio" name="mode" checked="@(_mode == ScanActionMode.CopySorted)" @onchange="@(() => _mode = ScanActionMode.CopySorted)" /> Copy sorted</label>
@@ -83,7 +83,7 @@
                     <label class="choice"><input type="checkbox" @bind="_enableDocuments" /> Documents</label>
                 </fieldset>
 
-                <fieldset title="Fast uses cheap checks. Deep runs more expensive validation where available.">
+                <fieldset title="Fast uses cheap checks. Standard uses external metadata/decode checks. Deep adds heavier media validation where supported.">
                     <legend>Validation depth</legend>
                     <label class="choice"><input type="radio" name="depth" checked="@(_validationDepth == ValidationDepth.Fast)" @onchange="@(() => _validationDepth = ValidationDepth.Fast)" /> Fast</label>
                     <label class="choice"><input type="radio" name="depth" checked="@(_validationDepth == ValidationDepth.Standard)" @onchange="@(() => _validationDepth = ValidationDepth.Standard)" /> Standard</label>
@@ -95,9 +95,24 @@
                     <input type="range" min="1" max="32" step="1" @bind="_concurrency" />
                 </label>
 
-                <label title="Seconds of media stream to inspect in standard/deep checks.">
+                <label title="How many seconds of audio/video to probe. Larger catches more issues but costs more time.">
                     Media probe seconds
                     <input type="number" min="10" max="600" step="10" @bind="_probeSeconds" />
+                </label>
+
+                <label title="Maximum time each external tool call may run before it is treated as timed out.">
+                    Tool timeout seconds
+                    <input type="number" min="5" max="600" step="5" @bind="_toolTimeoutSeconds" />
+                </label>
+
+                <label title="Optional safety cap for huge trees. Use 0 for unlimited.">
+                    Max files
+                    <input type="number" min="0" step="1000" @bind="_maxFiles" />
+                </label>
+
+                <label title="Optional safety cap for directory traversal. Use 0 for unlimited.">
+                    Max directories
+                    <input type="number" min="0" step="100" @bind="_maxDirectories" />
                 </label>
             </div>
         </section>
@@ -107,9 +122,9 @@
         <div class="section-title">
             <div>
                 <h2>3. Preview and preflight</h2>
-                <p>Preview only counts matching files and estimates size. It does not validate, copy, move, or modify files.</p>
+                <p>Preview streams through discovery only. Scan validates files and may copy in live modes. Preview is for sizing risk before work starts.</p>
             </div>
-            <button class="secondary" disabled="@_running" @onclick="PreviewAsync" title="Count matching files before running validation.">Run preview</button>
+            <button class="secondary" disabled="@(_running || _previewRunning)" @onclick="PreviewAsync" title="Count matching files before running validation.">@(_previewRunning ? "Previewing..." : "Run preview")</button>
         </div>
 
         <div class="tool-row">
@@ -121,6 +136,7 @@
 
         <div class="summary-grid">
             <div><strong>@(_preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
+            <div><strong>@(_preview?.TotalDirectories ?? 0)</strong><span>Preview folders</span></div>
             <div><strong>@PreviewMb</strong><span>Preview MB</span></div>
             <div><strong>@(_hardware?.RecommendedConcurrency ?? _concurrency)</strong><span>Suggested threads</span></div>
             <div><strong>@_validationDepth</strong><span>Depth</span></div>
@@ -178,6 +194,11 @@
             <div><h2>Help and FAQ</h2><p>Short answers for the normal workflow.</p></div>
         </div>
         <details open><summary>What does preview do?</summary><p>Preview walks the source folder and counts files that match the enabled categories. It estimates size only. It does not validate, copy, move, or change files.</p></details>
+        <details open><summary>Source vs target vs backup</summary><p>Source is the input tree. Target is where live modes write sorted output. Backup is optional and receives a second mirror copy from the sorted output.</p></details>
+        <details><summary>What does Auto tune do?</summary><p>Auto tune reads CPU count, memory, source drive type, target drive type, and whether source and target share a drive. It then recommends concurrency and buffer/probe defaults.</p></details>
+        <details><summary>Profile differences</summary><p>Fast favors speed and low overhead. Deep sort favors stricter validation and sorted output. Photos scans images only. Video scans video and audio only.</p></details>
+        <details><summary>Mode differences</summary><p>Dry run is read-only. Copy sorted writes categorized copies into target. Copy sorted + backup writes target copies and mirrors them into backup.</p></details>
+        <details><summary>Concurrency and limits</summary><p>Concurrency controls parallel validators. Max files and max directories cap huge scans. Tool timeout prevents external tools from hanging too long.</p></details>
         <details><summary>What is the safest mode?</summary><p>Dry run. It validates files and records results without writing sorted output.</p></details>
         <details><summary>When should I use deep validation?</summary><p>Use deep validation when accuracy matters more than speed. It can run slower external checks such as media decode probes.</p></details>
         <details><summary>How do pause and resume work?</summary><p>Pause stops new queued work from starting. Files already being processed may finish. Resume continues from the queue.</p></details>
@@ -190,6 +211,9 @@
     private string? _backupRoot;
     private int _concurrency = Math.Max(1, Environment.ProcessorCount / 2);
     private int _probeSeconds = 60;
+    private int _toolTimeoutSeconds = 20;
+    private int _maxFiles;
+    private int _maxDirectories;
     private ScanActionMode _mode = ScanActionMode.DryRun;
     private ValidationDepth _validationDepth = ValidationDepth.Fast;
     private bool _enableImages = true;
@@ -197,6 +221,7 @@
     private bool _enableAudio = true;
     private bool _enableDocuments = true;
     private bool _running;
+    private bool _previewRunning;
     private bool _confirmedLiveMode;
     private string? _message;
     private CancellationTokenSource? _scanCts;
@@ -240,9 +265,23 @@
 
     private async Task PreviewAsync()
     {
-        _preview = await PreviewService.PreviewAsync(BuildOptions(), CancellationToken.None);
-        _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
-        _message = "Preview complete. Review counts before starting live modes.";
+        _previewRunning = true;
+        _message = "Preview is discovering matching files. No validation or copying is happening.";
+        var progress = new Progress<ScanPreview>(p =>
+        {
+            _preview = p;
+            InvokeAsync(StateHasChanged);
+        });
+        try
+        {
+            _preview = await PreviewService.PreviewAsync(BuildOptions(), CancellationToken.None, progress);
+            _hardware = HardwareTuner.Recommend(_sourcePath, _targetRoot);
+            _message = "Preview complete. Review counts before starting live modes.";
+        }
+        finally
+        {
+            _previewRunning = false;
+        }
     }
 
     private async Task RunAsync()
@@ -301,6 +340,8 @@
     private ScanOptions BuildOptions()
     {
         var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
-        return new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, _enableImages, _enableVideo, _enableAudio, _enableDocuments, _concurrency, _probeSeconds, db, _validationDepth);
+        return new ScanOptions(_sourcePath, _targetRoot, string.IsNullOrWhiteSpace(_backupRoot) ? null : _backupRoot, _mode, _enableImages, _enableVideo, _enableAudio, _enableDocuments, _concurrency, _probeSeconds, db, _validationDepth, MaxFiles: ZeroAsNull(_maxFiles), MaxDirectories: ZeroAsNull(_maxDirectories), ExternalToolTimeoutSeconds: _toolTimeoutSeconds);
     }
+
+    private static int? ZeroAsNull(int value) => value <= 0 ? null : value;
 }

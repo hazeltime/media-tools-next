@@ -28,7 +28,7 @@ public sealed class ImageValidator(IExternalToolProbe tools) : IMediaValidator
             if (magick is null)
                 return Done(ValidationStatus.Valid, "header_match_magick_missing");
 
-            var result = await _runner.RunAsync(magick, ["identify", "-ping", candidate.FullPath], TimeSpan.FromSeconds(20), cancellationToken);
+            var result = await _runner.RunAsync(magick, ["identify", "-ping", candidate.FullPath], TimeSpan.FromSeconds(options.ExternalToolTimeoutSeconds), cancellationToken);
             if (result.TimedOut) return Done(ValidationStatus.Corrupt, "timeout");
             if (result.ExitCode == 0) return Done(ValidationStatus.Valid, "header_and_magick_ok");
             return Done(ValidationStatus.Corrupt, FirstDetail(result));
@@ -59,7 +59,7 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
         var result = await _runner.RunAsync(
             ffprobe,
             ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", candidate.FullPath],
-            TimeSpan.FromSeconds(Math.Max(10, options.MediaProbeSeconds)),
+            TimeSpan.FromSeconds(Math.Max(options.ExternalToolTimeoutSeconds, options.MediaProbeSeconds)),
             cancellationToken);
 
         if (result.TimedOut)
@@ -72,7 +72,7 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
             var ffmpeg = tools.FindExecutable("ffmpeg");
             if (ffmpeg is null)
                 return new(candidate, ValidationStatus.Valid, "ffprobe", "ffmpeg_missing_after_ffprobe_ok", sw.Elapsed);
-            var deep = await _runner.RunAsync(ffmpeg, ["-v", "error", "-t", options.MediaProbeSeconds.ToString(), "-i", candidate.FullPath, "-f", "null", "-"], TimeSpan.FromSeconds(options.MediaProbeSeconds + 30), cancellationToken);
+            var deep = await _runner.RunAsync(ffmpeg, ["-v", "error", "-t", options.MediaProbeSeconds.ToString(), "-i", candidate.FullPath, "-f", "null", "-"], TimeSpan.FromSeconds(options.MediaProbeSeconds + options.ExternalToolTimeoutSeconds), cancellationToken);
             if (deep.TimedOut) return new(candidate, ValidationStatus.Corrupt, "ffmpeg", "timeout", sw.Elapsed);
             return deep.ExitCode == 0 && string.IsNullOrWhiteSpace(deep.StandardError)
                 ? new(candidate, ValidationStatus.Valid, "ffmpeg", null, sw.Elapsed)
@@ -101,7 +101,7 @@ public sealed class DocumentValidator(IExternalToolProbe tools) : IMediaValidato
             if (qpdf is null)
                 return new(candidate, ValidationStatus.Unknown, "qpdf", "qpdf_missing", sw.Elapsed);
 
-            var result = await _runner.RunAsync(qpdf, ["--check", candidate.FullPath], TimeSpan.FromSeconds(20), cancellationToken);
+            var result = await _runner.RunAsync(qpdf, ["--check", candidate.FullPath], TimeSpan.FromSeconds(options.ExternalToolTimeoutSeconds), cancellationToken);
             return result.ExitCode == 0
                 ? new(candidate, ValidationStatus.Valid, "qpdf", null, sw.Elapsed)
                 : new(candidate, ValidationStatus.Corrupt, "qpdf", result.StandardError + result.StandardOutput, sw.Elapsed);

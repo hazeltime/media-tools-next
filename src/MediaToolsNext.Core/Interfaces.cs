@@ -50,7 +50,7 @@ public interface IHardwareTuner
 
 public interface IScanPreviewService
 {
-    Task<ScanPreview> PreviewAsync(ScanOptions options, CancellationToken cancellationToken);
+    Task<ScanPreview> PreviewAsync(ScanOptions options, CancellationToken cancellationToken, IProgress<ScanPreview>? progress = null);
 }
 
 public interface IReportExporter
