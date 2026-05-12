@@ -24,6 +24,7 @@
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="run"><span class="bi bi-check-nav-menu" aria-hidden="true"></span> 5 · Run</NavLink>
         </div>
+
         <div class="nav-section">Review</div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="results" Match="NavLinkMatch.All"><span class="bi bi-table-nav-menu" aria-hidden="true"></span> Results · All</NavLink>
@@ -49,5 +50,30 @@
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="help"><span class="bi bi-help-nav-menu" aria-hidden="true"></span> Help</NavLink>
         </div>
+
+        <div class="nav-item px-3 nav-about-item">
+            <button class="nav-link nav-about-btn" @onclick="() => _aboutOpen = true">
+                <span class="bi bi-info-nav-menu" aria-hidden="true"></span> About
+            </button>
+        </div>
     </nav>
 </div>
+
+@if (_aboutOpen)
+{
+    <div class="about-overlay" @onclick="() => _aboutOpen = false" role="dialog" aria-modal="true" aria-label="About Media Tools Next">
+        <div class="about-box" @onclick:stopPropagation>
+            <h2>Media Tools Next</h2>
+            <p class="about-version">v0.1.0.0 alpha</p>
+            <div class="about-links">
+                <a href="https://github.com/hazeltime" target="_blank" rel="noopener noreferrer">github.com/hazeltime</a>
+                <a href="mailto:berrat2@gmail.com">berrat2@gmail.com</a>
+            </div>
+            <button class="about-close" @onclick="() => _aboutOpen = false">Close</button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _aboutOpen;
+}

@@ -103,10 +103,13 @@ public sealed class ScannerPipeline(
             var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
             if (reusable is not null)
             {
-                // BUG FIX: cache hits must still be persisted under the current session
-                // so that GetSummaryAsync counts them and Results page shows them.
+                // Preserve the original detail from the cached result so the user
+                // can see *why* the file got its status, appended with (cached).
+                var originalDetail = string.IsNullOrWhiteSpace(reusable.Detail)
+                    ? "(cached)"
+                    : reusable.Detail + " (cached)";
                 var cached = new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator,
-                    "cache_reused_previous_validation", "cached", null, null, DateTimeOffset.UtcNow);
+                    originalDetail, "cached", null, null, DateTimeOffset.UtcNow);
                 await store.BatchSaveResultsAsync([cached], cancellationToken);
                 return cached;
             }
