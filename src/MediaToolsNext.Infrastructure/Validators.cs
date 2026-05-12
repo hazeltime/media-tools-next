@@ -26,14 +26,8 @@ public sealed class ImageValidator(IExternalToolProbe tools) : IMediaValidator
 
             var magick = tools.FindExecutable("magick");
             if (magick is null)
-            {
-                // Without magick we cannot confirm content integrity beyond header.
-                // Return Unknown rather than Valid to avoid masking corrupt images.
                 return Done(ValidationStatus.Unknown, "header_match_magick_missing");
-            }
 
-            // Standard: -ping reads only enough to identify the image (fast).
-            // Deep: full identify reads and decodes the entire pixel data.
             var arguments = options.ValidationDepth == ValidationDepth.Deep
                 ? new[] { "identify", "-regard-warnings", candidate.FullPath }
                 : new[] { "identify", "-ping", candidate.FullPath };
@@ -47,7 +41,6 @@ public sealed class ImageValidator(IExternalToolProbe tools) : IMediaValidator
             if (result.TimedOut) return Done(ValidationStatus.Corrupt, "timeout");
             if (result.ExitCode == 0 && string.IsNullOrWhiteSpace(result.StandardError))
                 return Done(ValidationStatus.Valid, "header_and_magick_ok");
-            // Non-zero exit or stderr output = corrupt or unreadable.
             return Done(ValidationStatus.Corrupt, FirstDetail(result));
         }
         catch (UnauthorizedAccessException ex) { return Done(ValidationStatus.Error, "access_denied: " + ex.Message); }
@@ -73,16 +66,6 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
         if (ffprobe is null)
             return new(candidate, ValidationStatus.Unknown, "ffprobe", "ffprobe_missing", sw.Elapsed);
 
-        // Standard / Deep: use ffprobe with full stream read.
-        // -v error        → only print errors to stderr
-        // -i <file>       → input
-        // -f null -       → decode all streams to /dev/null
-        // Any stderr output or non-zero exit indicates corruption.
-        //
-        // NOTE: the previous check (-show_entries format=duration) only validated
-        // the container header, not stream payload. A file with a valid header
-        // but corrupt frames would return exit 0 with a duration and be marked
-        // Valid — silently hiding corruption.
         var ffprobeArgs = new[]
         {
             "-v", "error",
@@ -100,11 +83,9 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
 
         if (result.ExitCode == 0 && string.IsNullOrWhiteSpace(result.StandardError))
         {
-            // Standard depth: ffprobe stream check is sufficient.
             if (options.ValidationDepth != ValidationDepth.Deep || Category == MediaCategory.Audio)
                 return new(candidate, ValidationStatus.Valid, "ffprobe", null, sw.Elapsed);
 
-            // Deep: additionally run full ffmpeg decode pass.
             var ffmpeg = tools.FindExecutable("ffmpeg");
             if (ffmpeg is null)
                 return new(candidate, ValidationStatus.Valid, "ffprobe", "ffmpeg_missing_after_ffprobe_ok", sw.Elapsed);
@@ -129,7 +110,6 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
                     sw.Elapsed);
         }
 
-        // Non-zero exit or stderr = container/stream error.
         var detail = !string.IsNullOrWhiteSpace(result.StandardError) ? result.StandardError : result.StandardOutput;
         return new(candidate, ValidationStatus.Corrupt, "ffprobe", detail, sw.Elapsed);
     }
@@ -161,14 +141,22 @@ public sealed class DocumentValidator(IExternalToolProbe tools) : IMediaValidato
                 TimeSpan.FromSeconds(options.ExternalToolTimeoutSeconds),
                 cancellationToken);
 
-            return result.ExitCode == 0
-                ? new(candidate, ValidationStatus.Valid,   "qpdf", null, sw.Elapsed)
-                : new(candidate, ValidationStatus.Corrupt, "qpdf", result.StandardError + result.StandardOutput, sw.Elapsed);
+            // qpdf exit codes:
+            //   0 = OK
+            //   1 = warnings only (e.g. auto-repaired XRef) — treat as Unknown
+            //       so repaired files are not silently classified as Valid.
+            //   2 = errors
+            //   3 = encrypted without password
+            return result.ExitCode switch
+            {
+                0 => new(candidate, ValidationStatus.Valid,   "qpdf", null, sw.Elapsed),
+                1 => new(candidate, ValidationStatus.Unknown, "qpdf", "qpdf_warnings: " + (result.StandardError + result.StandardOutput).Trim(), sw.Elapsed),
+                3 => new(candidate, ValidationStatus.Unknown, "qpdf", "encrypted_no_password", sw.Elapsed),
+                _ => new(candidate, ValidationStatus.Corrupt, "qpdf", (result.StandardError + result.StandardOutput).Trim(), sw.Elapsed)
+            };
         }
 
-        // Non-PDF: attempt to open and read a minimal probe block.
-        // File.Open alone only checks filesystem access, not content integrity.
-        // Reading ProbeBytes catches truncated files and some corrupt formats.
+        // Non-PDF: read a minimal probe block to catch truncated/corrupt files.
         try
         {
             await using var stream = File.Open(candidate.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);

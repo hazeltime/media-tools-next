@@ -10,7 +10,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
         ".git", "node_modules", "System Volume Information", "$RECYCLE.BIN", "_out", "bin", "obj"
     };
 
-    // Max path length for Win32 without extended prefix.
     private const int Win32MaxPath = 260;
 
     public async IAsyncEnumerable<FileCandidate> DiscoverAsync(
@@ -31,6 +30,8 @@ public sealed class FileDiscoverer : IFileDiscoverer
         var scannedBytes  = 0L;
         var matchedBytes  = 0L;
         var matchedDirs   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // MaxFiles and MaxDirectories are legacy aliases kept for CLI backwards
+        // compatibility. MaxMatchedFiles / MaxSearchedDirectories take precedence.
         var maxSearchedDirs  = options.MaxSearchedDirectories ?? options.MaxDirectories;
         var maxMatchedFiles  = options.MaxMatchedFiles ?? options.MaxFiles;
         var customImageRegex = CreateRegex(options.CustomImageRegex);
@@ -57,36 +58,32 @@ public sealed class FileDiscoverer : IFileDiscoverer
                     pending.Enqueue(dir);
             }
 
-            // Collect access-denied file stubs before yielding matched candidates.
             foreach (var (file, accessError) in SafeEnumerateFilesWithErrors(current))
             {
                 if (accessError is not null)
                 {
-                    // Yield a zero-size error stub so the user sees access-denied files.
                     var ext2 = Path.GetExtension(file).ToLowerInvariant();
                     var cat2 = GetCategory(file, ext2, options, customImageRegex);
                     var stub = new FileCandidate(file, Path.GetRelativePath(source, file), ext2,
                         cat2 == MediaCategory.Unknown ? MediaCategory.Image : cat2,
                         0L, DateTimeOffset.MinValue);
-                    // We surface this as an inline ValidationOutcome; create a
-                    // surrogate ScanResultRecord via a dedicated error path in
-                    // ScannerPipeline. For discoverer purposes we yield the stub
-                    // with a flag recognised by the pipeline.
-                    // Since we cannot carry error metadata on FileCandidate we
-                    // yield the stub — ScannerPipeline will call the validator
-                    // which will hit File.Exists → Error outcome.
                     yield return stub;
                     continue;
                 }
 
                 FileInfo info;
                 try { info = new FileInfo(file); }
-                catch (PathTooLongException)  { continue; }  // already long-path normalised; skip if still fails
-                catch (UnauthorizedAccessException) { continue; }
-                catch { continue; }
+                catch (PathTooLongException)         { continue; }
+                catch (UnauthorizedAccessException)  { continue; }
+                catch                                { continue; }
+
+                // Cache Exists once — FileInfo.Exists is not memoised and each
+                // call performs a filesystem stat.
+                var fileExists = info.Exists;
+                var fileLength = fileExists ? info.Length : 0L;
 
                 searchedFiles++;
-                scannedBytes += info.Exists ? info.Length : 0;
+                scannedBytes += fileLength;
 
                 if (ShouldStopForRuntime() || ShouldStopBeforeNextMatch())
                     yield break;
@@ -97,12 +94,12 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 var category = GetCategory(file, ext, options, customImageRegex);
                 if (category == MediaCategory.Unknown || !IsEnabled(category, options))
                     continue;
-                if (options.MinCandidateBytes is long minBytes && info.Length < minBytes)
+                if (options.MinCandidateBytes is long minBytes && fileLength < minBytes)
                     continue;
-                if (options.MaxCandidateBytes is long maxBytes && info.Length > maxBytes)
+                if (options.MaxCandidateBytes is long maxBytes && fileLength > maxBytes)
                     continue;
 
-                if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + info.Length > maxMatchedBytes)
+                if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + fileLength > maxMatchedBytes)
                 {
                     Stop($"Stopped before exceeding the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
                     yield break;
@@ -119,7 +116,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 }
 
                 matchedFiles++;
-                matchedBytes += info.Exists ? info.Length : 0;
+                matchedBytes += fileLength;
                 if (!string.IsNullOrWhiteSpace(matchDir))
                     matchedDirs.Add(matchDir);
 
@@ -128,8 +125,8 @@ public sealed class FileDiscoverer : IFileDiscoverer
                     Path.GetRelativePath(source, info.FullName),
                     ext,
                     category,
-                    info.Exists ? info.Length : 0,
-                    info.Exists ? info.LastWriteTimeUtc : DateTimeOffset.MinValue);
+                    fileLength,
+                    fileExists ? info.LastWriteTimeUtc : DateTimeOffset.MinValue);
                 await Task.Yield();
             }
         }
@@ -173,10 +170,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
         void Stop(string reason) => options.LimitState?.Stop(reason);
     }
 
-    /// <summary>
-    /// Returns (filePath, errorMessage?) pairs. errorMessage is non-null for
-    /// access-denied entries so callers can surface them as Error stubs.
-    /// </summary>
     private static IEnumerable<(string Path, string? Error)> SafeEnumerateFilesWithErrors(string path)
     {
         IEnumerable<string> entries;
@@ -189,10 +182,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
         catch                                  { yield break; }
 
         foreach (var file in entries)
-        {
-            // Normalise long paths before yielding so downstream File.Exists etc. work.
             yield return (NormalizeLongPath(file), null);
-        }
     }
 
     private static IEnumerable<string> SafeEnumerateDirectories(string path)
@@ -206,17 +196,11 @@ public sealed class FileDiscoverer : IFileDiscoverer
         catch { return []; }
     }
 
-    /// <summary>
-    /// Prepend the Win32 long-path prefix (\\?\) on Windows when the path
-    /// exceeds the default MAX_PATH limit of 260 characters.
-    /// This prevents silent skip of deeply nested directories and files.
-    /// </summary>
     private static string NormalizeLongPath(string path)
     {
         if (!OperatingSystem.IsWindows()) return path;
         if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path;
         if (path.Length < Win32MaxPath) return path;
-        // UNC paths get a different prefix.
         if (path.StartsWith(@"\\", StringComparison.Ordinal))
             return @"\\?\UNC\" + path[2..];
         return @"\\?\" + path;

@@ -10,11 +10,15 @@ public sealed class ScannerPipeline(
     IScanStore store,
     ScanControl control) : IScannerPipeline
 {
+    // Access-denied stubs from FileDiscoverer carry SizeBytes=0 and
+    // LastWriteTimeUtc=DateTimeOffset.MinValue. We identify them by this
+    // sentinel so we can skip FindReusableResultAsync and avoid duplicate
+    // DB rows when the same inaccessible path appears more than once.
+    private static bool IsAccessDeniedStub(FileCandidate c) =>
+        c.SizeBytes == 0 && c.LastWriteTimeUtc == DateTimeOffset.MinValue;
+
     public async Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
     {
-        // Build a linked token that also cancels on MaxRuntimeSeconds expiry.
-        // All operations inside this method use runToken so that the timeout
-        // applies uniformly, including store initialisation and session creation.
         using var runtimeCts = CreateRuntimeCancellation(options, cancellationToken);
         var runToken = runtimeCts?.Token ?? cancellationToken;
 
@@ -47,13 +51,32 @@ public sealed class ScannerPipeline(
             }
         }, runToken);
 
+        // Per-worker result buffer: flush to DB every BatchSize records to
+        // amortise SQLite open/close overhead without holding large batches.
+        const int BatchSize = 32;
+
         var workers = Enumerable.Range(0, Math.Max(1, options.MaxConcurrency)).Select(_ => Task.Run(async () =>
         {
+            var buffer = new List<ScanResultRecord>(BatchSize);
+
+            async Task FlushAsync(CancellationToken ct)
+            {
+                if (buffer.Count == 0) return;
+                await store.BatchSaveResultsAsync(buffer, ct);
+                foreach (var r in buffer) progress?.Report(r);
+                buffer.Clear();
+            }
+
             await foreach (var candidate in channel.Reader.ReadAllAsync(runToken))
             {
                 await control.WaitIfPausedAsync(runToken);
-                await ProcessCandidateAsync(sessionId, candidate, options, progress, runToken);
+                var record = await ProcessCandidateAsync(sessionId, candidate, options, runToken);
+                buffer.Add(record);
+                if (buffer.Count >= BatchSize)
+                    await FlushAsync(runToken);
             }
+
+            await FlushAsync(runToken);
         }, runToken)).ToArray();
 
         try
@@ -66,21 +89,22 @@ public sealed class ScannerPipeline(
             options.LimitState?.StopAfterWorkStarted(RuntimeStopReason(options));
         }
 
-        // Use the outer cancellationToken for the final summary read so we can
-        // still retrieve results even if the runtime limit was reached.
         var summary = await store.GetSummaryAsync(sessionId, cancellationToken);
         return summary with { CompletionReason = options.LimitState?.StopReason ?? summary.CompletionReason };
     }
 
-    private async Task ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
+    private async Task<ScanResultRecord> ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
     {
-        var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
-        if (reusable is not null)
+        // Access-denied stubs must not go through cache lookup — they have a
+        // synthetic key (size=0, time=MinValue) that would match any previously
+        // stored zero-byte entry for the same path.
+        if (!IsAccessDeniedStub(candidate))
         {
-            var resumed = new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator, "cache_reused_previous_validation", "cached", null, null, DateTimeOffset.UtcNow);
-            await store.SaveResultAsync(resumed, cancellationToken);
-            progress?.Report(resumed);
-            return;
+            var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
+            if (reusable is not null)
+            {
+                return new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator, "cache_reused_previous_validation", "cached", null, null, DateTimeOffset.UtcNow);
+            }
         }
 
         var validator = validators.GetValidator(candidate.Category);
@@ -88,9 +112,7 @@ public sealed class ScannerPipeline(
             ? await ValidateWithRetryAsync(validator, candidate, options, cancellationToken)
             : new ValidationOutcome(candidate, ValidationStatus.Skipped, "none", "category_disabled", TimeSpan.Zero);
         var action = await ApplyWithRetryAsync(outcome, options, cancellationToken);
-        var record = new ScanResultRecord(sessionId, candidate, outcome.Status, outcome.Validator, outcome.Detail, action.Action, action.PrimaryTargetPath, action.BackupTargetPath, DateTimeOffset.UtcNow);
-        await store.SaveResultAsync(record, cancellationToken);
-        progress?.Report(record);
+        return new ScanResultRecord(sessionId, candidate, outcome.Status, outcome.Validator, outcome.Detail, action.Action, action.PrimaryTargetPath, action.BackupTargetPath, DateTimeOffset.UtcNow);
     }
 
     private static async Task<ValidationOutcome> ValidateWithRetryAsync(IMediaValidator validator, FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
@@ -109,8 +131,20 @@ public sealed class ScannerPipeline(
     {
         for (var attempt = 0; ; attempt++)
         {
-            try { return await actions.ApplyAsync(outcome, options, cancellationToken); }
-            catch (IOException) when (attempt < options.MaxRetries) { await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken); }
+            try
+            {
+                return await actions.ApplyAsync(outcome, options, cancellationToken);
+            }
+            catch (Exception ex) when (RetryPolicy.ShouldRetryIOException(ex) && attempt < options.MaxRetries)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken);
+            }
+            catch (Exception ex) when (!RetryPolicy.ShouldRetryIOException(ex))
+            {
+                // Non-retryable exception from the file action — surface as an
+                // Error outcome rather than crashing the worker.
+                return new FileActionOutcome("error: " + ex.GetType().Name + ": " + ex.Message, null, null, null);
+            }
         }
     }
 
