@@ -47,23 +47,23 @@
                     <span class="live-count-label">Scanned</span>
                 </div>
                 <div class="live-count valid">
-                    <span class="live-count-value">@CountStatus(ValidationStatus.Valid).ToString("N0")</span>
+                    <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Valid).ToString("N0")</span>
                     <span class="live-count-label">Valid</span>
                 </div>
                 <div class="live-count corrupt">
-                    <span class="live-count-value">@CountStatus(ValidationStatus.Corrupt).ToString("N0")</span>
+                    <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Corrupt).ToString("N0")</span>
                     <span class="live-count-label">Corrupt</span>
                 </div>
                 <div class="live-count unknown">
-                    <span class="live-count-value">@CountStatus(ValidationStatus.Unknown).ToString("N0")</span>
+                    <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Unknown).ToString("N0")</span>
                     <span class="live-count-label">Unknown</span>
                 </div>
                 <div class="live-count error">
-                    <span class="live-count-value">@CountStatus(ValidationStatus.Error).ToString("N0")</span>
+                    <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Error).ToString("N0")</span>
                     <span class="live-count-label">Error</span>
                 </div>
                 <div class="live-count skipped">
-                    <span class="live-count-value">@CountStatus(ValidationStatus.Skipped).ToString("N0")</span>
+                    <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Skipped).ToString("N0")</span>
                     <span class="live-count-label">Skipped</span>
                 </div>
                 <div class="live-count perf">
@@ -125,12 +125,62 @@
         : State.IsPreviewing
             ? "Discovering matched files only. No files are copied or changed."
             : "No active job. Preview or scan can be started.";
-    private int CountStatus(ValidationStatus s) => State.Results.Count(r => r.Status == s);
+
     private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
 
     protected override void OnInitialized() => State.Changed += OnStateChanged;
-    public void Dispose() => State.Changed -= OnStateChanged;
+    public void Dispose()
+    {
+        State.Changed -= OnStateChanged;
+        _throttleTimer?.Dispose();
+    }
+
+    // ── Throttled UI updates ──────────────────────────────────────────────────
+    // Progress<T> fires on every file from worker threads. Calling
+    // StateHasChanged on every file causes a re-render storm that makes the
+    // UI lag badly at high scan rates.
+    //
+    // Solution: accumulate incoming records in a lock-free queue; a timer
+    // flushes the queue and triggers a single StateHasChanged at most 4×/s.
+    private readonly System.Collections.Concurrent.ConcurrentQueue<ScanResultRecord> _pending = new();
+    private System.Threading.Timer? _throttleTimer;
+    private const int ThrottleMs = 250; // max 4 UI updates per second
+
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private IProgress<ScanResultRecord> BuildThrottledProgress(ScanPerformanceTracker tracker)
+    {
+        _throttleTimer?.Dispose();
+        _throttleTimer = new System.Threading.Timer(_ =>
+        {
+            if (_pending.IsEmpty) return;
+            // Drain queue onto State.Results on the UI thread.
+            InvokeAsync(() =>
+            {
+                while (_pending.TryDequeue(out var r))
+                {
+                    State.Results.Add(r);
+                    State.Performance = tracker.Add(r);
+                    State.IncrementStatusCount(r.Status);
+                }
+                StateHasChanged();
+            });
+        }, null, ThrottleMs, ThrottleMs);
+
+        return new Progress<ScanResultRecord>(r => _pending.Enqueue(r));
+    }
+
+    private void FlushPending(ScanPerformanceTracker tracker)
+    {
+        _throttleTimer?.Dispose();
+        _throttleTimer = null;
+        while (_pending.TryDequeue(out var r))
+        {
+            State.Results.Add(r);
+            State.Performance = tracker.Add(r);
+            State.IncrementStatusCount(r.Status);
+        }
+    }
 
     private async Task PreviewAsync()
     {
@@ -152,21 +202,27 @@
     {
         if (Errors.Any()) { State.Message = "Scan blocked: " + Errors[0]; State.NotifyChanged(); return; }
         if (!State.TryStartScan()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
-        var limit = new ScanLimitState();
+        var limit   = new ScanLimitState();
         var tracker = new ScanPerformanceTracker();
-        var progress = new Progress<ScanResultRecord>(r => { State.Results.Add(r); State.Performance = tracker.Add(r); State.NotifyChanged(); });
+        State.ResetStatusCounts();
+        var progress = BuildThrottledProgress(tracker);
         try
         {
             State.Summary = await Pipeline.RunAsync(State.BuildOptions(limit), progress, State.ScanCancellationToken);
             State.LastCompletionReason = State.Summary.CompletionReason;
+            FlushPending(tracker);
             State.FinishScan("Scan complete.");
         }
-        catch (OperationCanceledException) { State.LastCompletionReason = "Cancelled."; State.FinishScan("Scan cancelled."); }
-        catch (Exception ex) { State.LastCompletionReason = "Scan failed."; State.FinishScan("Scan failed: " + ex.Message); }
-        finally { if (State.IsScanning) State.FinishScan(State.Message ?? "Scan stopped."); ScanControl.Resume(); }
+        catch (OperationCanceledException) { State.LastCompletionReason = "Cancelled.";    FlushPending(tracker); State.FinishScan("Scan cancelled."); }
+        catch (Exception ex)               { State.LastCompletionReason = "Scan failed.";  FlushPending(tracker); State.FinishScan("Scan failed: " + ex.Message); }
+        finally
+        {
+            if (State.IsScanning) { FlushPending(tracker); State.FinishScan(State.Message ?? "Scan stopped."); }
+            ScanControl.Resume();
+        }
     }
 
-    private void Pause() { ScanControl.Pause(); State.NotifyChanged(); }
+    private void Pause()  { ScanControl.Pause();  State.NotifyChanged(); }
     private void Resume() { ScanControl.Resume(); State.NotifyChanged(); }
     private void Cancel() => State.CancelScan();
 }

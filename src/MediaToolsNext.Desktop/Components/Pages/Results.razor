@@ -31,14 +31,16 @@
 
     <section class="result-toolbar panel">
         <label>Status
-            <select @bind="StatusFilter">
+            <select @bind="_statusFilter" @bind:after="RebuildCache">
                 <option value="">All statuses</option>
                 @foreach (var status in Enum.GetValues<ValidationStatus>()) { <option value="@status.ToString()">@status</option> }
             </select>
         </label>
-        <label>Search path or detail <input @bind="SearchText" @bind:event="oninput" placeholder="filename, folder, validator detail…" /></label>
+        <label>Search path or detail
+            <input @bind="_searchText" @bind:event="oninput" @bind:after="RebuildCache" placeholder="filename, folder, validator detail…" />
+        </label>
         <label>Sort
-            <select @bind="State.ReportSort">
+            <select @bind="State.ReportSort" @bind:after="RebuildCache">
                 <option value="status-path">Status, then path</option>
                 <option value="path">Path</option>
                 <option value="size-desc">Largest first</option>
@@ -50,14 +52,17 @@
 
     <section class="summary-grid">
         <div><strong>@State.Results.Count</strong><span>Total</span></div>
-        @foreach (var status in Enum.GetValues<ValidationStatus>()) { <div><strong>@State.Results.Count(x => x.Status == status)</strong><span>@status</span></div> }
+        @foreach (var status in Enum.GetValues<ValidationStatus>())
+        {
+            <div><strong>@State.GetStatusCount(status)</strong><span>@status</span></div>
+        }
     </section>
 
     <section class="panel results-panel">
         <div class="result-count">
-            <strong>@FilteredRows.Count.ToString("N0")</strong>
+            <strong>@_filteredCount.ToString("N0")</strong>
             <span>
-                @if (FilteredRows.Count > 500)
+                @if (_filteredCount > 500)
                 {
                     <text>matching rows — showing first 500.</text>
                 }
@@ -71,7 +76,7 @@
             <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
             <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
             <tbody>
-                @foreach (var row in VisibleRows)
+                @foreach (var row in _visibleRows)
                 {
                     <tr>
                         <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
@@ -82,7 +87,7 @@
                         <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
                     </tr>
                 }
-                @if (VisibleRows.Count == 0)
+                @if (_visibleRows.Count == 0)
                 {
                     <tr><td colspan="6" class="empty-cell">No results match the current filter.</td></tr>
                 }
@@ -92,46 +97,78 @@
 </div>
 
 @code {
-    private string StatusFilter { get; set; } = string.Empty;
-    private string SearchText { get; set; } = string.Empty;
-    private List<ScanResultRecord> FilteredRows => Rows.Where(MatchesFilter).ToList();
-    private List<ScanResultRecord> VisibleRows => FilteredRows.Take(500).ToList();
+    private string _statusFilter = string.Empty;
+    private string _searchText   = string.Empty;
 
-    private IEnumerable<ScanResultRecord> Rows => State.ReportSort switch
+    // Cached filtered/visible rows — rebuilt only when data or filters change,
+    // not on every Blazor render cycle.
+    private List<ScanResultRecord> _visibleRows  = [];
+    private int                    _filteredCount = 0;
+
+    protected override void OnInitialized()
     {
-        "path" => State.Results.OrderBy(x => x.Candidate.RelativePath),
-        "size-desc" => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
-        "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
-        _ => State.Results
-    };
+        State.Changed += OnStateChanged;
+        RebuildCache();
+    }
 
-    protected override void OnInitialized() => State.Changed += OnStateChanged;
     public void Dispose() => State.Changed -= OnStateChanged;
-    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(() =>
+        {
+            RebuildCache();
+            StateHasChanged();
+        });
+    }
+
+    private void RebuildCache()
+    {
+        var sorted = State.ReportSort switch
+        {
+            "path"        => State.Results.OrderBy(x => x.Candidate.RelativePath),
+            "size-desc"   => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
+            "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
+            _             => (IEnumerable<ScanResultRecord>)State.Results
+        };
+
+        var filtered = sorted.Where(MatchesFilter).ToList();
+        _filteredCount = filtered.Count;
+        _visibleRows   = filtered.Take(500).ToList();
+    }
 
     private bool MatchesFilter(ScanResultRecord row)
     {
-        if (!string.IsNullOrWhiteSpace(StatusFilter) && !string.Equals(row.Status.ToString(), StatusFilter, StringComparison.OrdinalIgnoreCase)) return false;
-        if (string.IsNullOrWhiteSpace(SearchText)) return true;
-        return row.Candidate.RelativePath.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || row.Candidate.FullPath.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || (row.Detail?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false)
-            || row.Validator.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(_statusFilter)
+            && !string.Equals(row.Status.ToString(), _statusFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (string.IsNullOrWhiteSpace(_searchText)) return true;
+        return row.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || row.Candidate.FullPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
+            || (row.Detail?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
+            || row.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task ExportAsync()
     {
+        var rows = State.ReportSort switch
+        {
+            "path"        => State.Results.OrderBy(x => x.Candidate.RelativePath),
+            "size-desc"   => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
+            "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
+            _             => (IEnumerable<ScanResultRecord>)State.Results
+        };
         var path = await Picker.PickCsvSavePathAsync("media-tools-results." + State.ReportFormat);
         if (string.IsNullOrWhiteSpace(path)) return;
-        if (State.ReportFormat == "csv") await CsvExporter.ExportCsvAsync(Rows, path, CancellationToken.None);
-        else await File.WriteAllLinesAsync(path, Rows.Select(x => $"{x.Status}\t{x.Candidate.Category}\t{x.Candidate.RelativePath}\t{x.Detail}"));
+        if (State.ReportFormat == "csv") await CsvExporter.ExportCsvAsync(rows, path, CancellationToken.None);
+        else await File.WriteAllLinesAsync(path, rows.Select(x => $"{x.Status}\t{x.Candidate.Category}\t{x.Candidate.RelativePath}\t{x.Detail}"));
         State.Message = "Exported results: " + path;
     }
 
     private static string FormatBytes(long bytes)
     {
         if (bytes >= 1_048_576) return (bytes / 1_048_576d).ToString("N1") + " MB";
-        if (bytes >= 1_024) return (bytes / 1_024d).ToString("N1") + " KB";
+        if (bytes >= 1_024)     return (bytes / 1_024d).ToString("N1") + " KB";
         return bytes + " B";
     }
 

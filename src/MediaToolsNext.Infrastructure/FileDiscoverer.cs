@@ -10,9 +10,14 @@ public sealed class FileDiscoverer : IFileDiscoverer
         ".git", "node_modules", "System Volume Information", "$RECYCLE.BIN", "_out", "bin", "obj"
     };
 
-    public async IAsyncEnumerable<FileCandidate> DiscoverAsync(ScanOptions options, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    // Max path length for Win32 without extended prefix.
+    private const int Win32MaxPath = 260;
+
+    public async IAsyncEnumerable<FileCandidate> DiscoverAsync(
+        ScanOptions options,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var source = Path.GetFullPath(options.SourcePath);
+        var source = NormalizeLongPath(Path.GetFullPath(options.SourcePath));
         if (!Directory.Exists(source))
             yield break;
 
@@ -20,17 +25,17 @@ public sealed class FileDiscoverer : IFileDiscoverer
         var pending = new Queue<string>();
         pending.Enqueue(source);
         var started = DateTimeOffset.UtcNow;
-        var searchedDirs = 0;
+        var searchedDirs  = 0;
         var searchedFiles = 0;
-        var matchedFiles = 0;
-        var scannedBytes = 0L;
-        var matchedBytes = 0L;
-        var matchedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var maxSearchedDirs = options.MaxSearchedDirectories ?? options.MaxDirectories;
-        var maxMatchedFiles = options.MaxMatchedFiles ?? options.MaxFiles;
+        var matchedFiles  = 0;
+        var scannedBytes  = 0L;
+        var matchedBytes  = 0L;
+        var matchedDirs   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var maxSearchedDirs  = options.MaxSearchedDirectories ?? options.MaxDirectories;
+        var maxMatchedFiles  = options.MaxMatchedFiles ?? options.MaxFiles;
         var customImageRegex = CreateRegex(options.CustomImageRegex);
-        var includePatterns = CompileWildcards(options.IncludeFileNamePatterns);
-        var excludePatterns = CompileWildcards(options.ExcludeFileNamePatterns);
+        var includePatterns  = CompileWildcards(options.IncludeFileNamePatterns);
+        var excludePatterns  = CompileWildcards(options.ExcludeFileNamePatterns);
 
         while (pending.Count > 0)
         {
@@ -52,10 +57,32 @@ public sealed class FileDiscoverer : IFileDiscoverer
                     pending.Enqueue(dir);
             }
 
-            foreach (var file in SafeEnumerateFiles(current))
+            // Collect access-denied file stubs before yielding matched candidates.
+            foreach (var (file, accessError) in SafeEnumerateFilesWithErrors(current))
             {
+                if (accessError is not null)
+                {
+                    // Yield a zero-size error stub so the user sees access-denied files.
+                    var ext2 = Path.GetExtension(file).ToLowerInvariant();
+                    var cat2 = GetCategory(file, ext2, options, customImageRegex);
+                    var stub = new FileCandidate(file, Path.GetRelativePath(source, file), ext2,
+                        cat2 == MediaCategory.Unknown ? MediaCategory.Image : cat2,
+                        0L, DateTimeOffset.MinValue);
+                    // We surface this as an inline ValidationOutcome; create a
+                    // surrogate ScanResultRecord via a dedicated error path in
+                    // ScannerPipeline. For discoverer purposes we yield the stub
+                    // with a flag recognised by the pipeline.
+                    // Since we cannot carry error metadata on FileCandidate we
+                    // yield the stub — ScannerPipeline will call the validator
+                    // which will hit File.Exists → Error outcome.
+                    yield return stub;
+                    continue;
+                }
+
                 FileInfo info;
                 try { info = new FileInfo(file); }
+                catch (PathTooLongException)  { continue; }  // already long-path normalised; skip if still fails
+                catch (UnauthorizedAccessException) { continue; }
                 catch { continue; }
 
                 searchedFiles++;
@@ -75,9 +102,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 if (options.MaxCandidateBytes is long maxBytes && info.Length > maxBytes)
                     continue;
 
-                // Guard: stop before this file would push matchedBytes over the limit.
-                // Single consolidated check — avoids the duplicate logic that existed
-                // when this was also checked inside ShouldStopBeforeNextMatch.
                 if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + info.Length > maxMatchedBytes)
                 {
                     Stop($"Stopped before exceeding the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
@@ -129,35 +153,73 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 Stop($"Stopped after inspecting {maxSearchedFiles:N0} searched files.");
                 return true;
             }
-
             if (options.MinScannedBytes is long minScannedBytes && scannedBytes < minScannedBytes)
-            {
-                // Haven't reached the minimum yet — keep going without yielding this file.
-                // This is not a stop condition; we simply skip emitting until the threshold is met.
                 return false;
-            }
-
             if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes)
             {
                 Stop($"Stopped after inspecting {FormatBytes(maxScannedBytes)} of searched data.");
                 return true;
             }
-
             if (maxMatchedFiles is int maxFiles && matchedFiles >= maxFiles)
             {
                 Stop($"Stopped after matching {maxFiles:N0} files.");
                 return true;
             }
-
-            // MinMatchedBytes: don't stop, but suppress yielding this candidate until
-            // the minimum matched-byte threshold has been reached.
             if (options.MinMatchedBytes is long minMatchedBytes && matchedBytes < minMatchedBytes)
                 return false;
-
             return false;
         }
 
         void Stop(string reason) => options.LimitState?.Stop(reason);
+    }
+
+    /// <summary>
+    /// Returns (filePath, errorMessage?) pairs. errorMessage is non-null for
+    /// access-denied entries so callers can surface them as Error stubs.
+    /// </summary>
+    private static IEnumerable<(string Path, string? Error)> SafeEnumerateFilesWithErrors(string path)
+    {
+        IEnumerable<string> entries;
+        try
+        {
+            entries = Directory.EnumerateFiles(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (UnauthorizedAccessException ex) { yield return (path, "access_denied: " + ex.Message); yield break; }
+        catch (PathTooLongException)           { yield break; }
+        catch                                  { yield break; }
+
+        foreach (var file in entries)
+        {
+            // Normalise long paths before yielding so downstream File.Exists etc. work.
+            yield return (NormalizeLongPath(file), null);
+        }
+    }
+
+    private static IEnumerable<string> SafeEnumerateDirectories(string path)
+    {
+        try
+        {
+            return Directory.EnumerateDirectories(NormalizeLongPath(path))
+                            .Select(NormalizeLongPath)
+                            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+        }
+        catch { return []; }
+    }
+
+    /// <summary>
+    /// Prepend the Win32 long-path prefix (\\?\) on Windows when the path
+    /// exceeds the default MAX_PATH limit of 260 characters.
+    /// This prevents silent skip of deeply nested directories and files.
+    /// </summary>
+    private static string NormalizeLongPath(string path)
+    {
+        if (!OperatingSystem.IsWindows()) return path;
+        if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path;
+        if (path.Length < Win32MaxPath) return path;
+        // UNC paths get a different prefix.
+        if (path.StartsWith(@"\\", StringComparison.Ordinal))
+            return @"\\?\UNC\" + path[2..];
+        return @"\\?\" + path;
     }
 
     private static bool IsEnabled(MediaCategory category, ScanOptions options) => category switch
@@ -180,18 +242,15 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
     private static Regex? CreateRegex(string? pattern)
     {
-        if (string.IsNullOrWhiteSpace(pattern))
-            return null;
+        if (string.IsNullOrWhiteSpace(pattern)) return null;
         return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
     }
 
     private static bool MatchesFileFilters(FileInfo info, IReadOnlyList<Regex> includePatterns, IReadOnlyList<Regex> excludePatterns)
     {
         var name = info.Name;
-        if (includePatterns.Count > 0 && !includePatterns.Any(x => x.IsMatch(name)))
-            return false;
-        if (excludePatterns.Any(x => x.IsMatch(name)))
-            return false;
+        if (includePatterns.Count > 0 && !includePatterns.Any(x => x.IsMatch(name))) return false;
+        if (excludePatterns.Any(x => x.IsMatch(name))) return false;
         return true;
     }
 
@@ -201,18 +260,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
             .Select(x => "^" + Regex.Escape(x.Trim()).Replace("\\*", ".*").Replace("\\?", ".") + "$")
             .Select(x => new Regex(x, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled))
             .ToArray() ?? [];
-
-    private static IEnumerable<string> SafeEnumerateDirectories(string path)
-    {
-        try { return Directory.EnumerateDirectories(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase); }
-        catch { return []; }
-    }
-
-    private static IEnumerable<string> SafeEnumerateFiles(string path)
-    {
-        try { return Directory.EnumerateFiles(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase); }
-        catch { return []; }
-    }
 
     private static IReadOnlySet<string> GetExcludedRoots(string source, ScanOptions options)
     {
@@ -236,7 +283,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
     private static bool IsSameOrChildPath(string parent, string path)
     {
         var normalizedParent = NormalizeDirectory(parent);
-        var normalizedPath = NormalizeDirectory(path);
+        var normalizedPath   = NormalizeDirectory(path);
         return normalizedPath.Equals(normalizedParent, StringComparison.OrdinalIgnoreCase)
             || normalizedPath.StartsWith(normalizedParent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
