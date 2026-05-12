@@ -1,0 +1,32 @@
+@page "/history"
+@inject ScanWorkflowState State
+@inject IScanStore Store
+
+<div class="page-stack">
+    <header class="page-header"><p class="eyebrow">Review</p><h1>Saved scans</h1><p>Load prior sessions from the local SQLite database.</p></header>
+    <section class="panel">
+        <button @onclick="Load">Load recent</button>
+        <div class="session-list">
+            @foreach (var session in State.Sessions)
+            {
+                <button class="session-row" @onclick="() => Open(session.SessionId)"><strong>@session.StartedUtc.LocalDateTime.ToString("g")</strong><span>@session.ActionMode - @session.SourcePath</span></button>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    private async Task Load()
+    {
+        await Store.InitializeAsync(CancellationToken.None);
+        State.Sessions.Clear();
+        State.Sessions.AddRange(await Store.ListSessionsAsync(30, CancellationToken.None));
+    }
+
+    private async Task Open(Guid id)
+    {
+        State.Results.Clear();
+        State.Results.AddRange(await Store.ListResultsAsync(id, CancellationToken.None));
+        State.Summary = await Store.GetSummaryAsync(id, CancellationToken.None);
+    }
+}

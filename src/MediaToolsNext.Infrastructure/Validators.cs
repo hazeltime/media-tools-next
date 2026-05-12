@@ -28,7 +28,10 @@ public sealed class ImageValidator(IExternalToolProbe tools) : IMediaValidator
             if (magick is null)
                 return Done(ValidationStatus.Valid, "header_match_magick_missing");
 
-            var result = await _runner.RunAsync(magick, ["identify", "-ping", candidate.FullPath], TimeSpan.FromSeconds(options.ExternalToolTimeoutSeconds), cancellationToken);
+            var arguments = options.ValidationDepth == ValidationDepth.Deep
+                ? new[] { "identify", candidate.FullPath }
+                : ["identify", "-ping", candidate.FullPath];
+            var result = await _runner.RunAsync(magick, arguments, TimeSpan.FromSeconds(options.ExternalToolTimeoutSeconds), cancellationToken);
             if (result.TimedOut) return Done(ValidationStatus.Corrupt, "timeout");
             if (result.ExitCode == 0) return Done(ValidationStatus.Valid, "header_and_magick_ok");
             return Done(ValidationStatus.Corrupt, FirstDetail(result));

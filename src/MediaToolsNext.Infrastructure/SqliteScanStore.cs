@@ -119,6 +119,34 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         return results;
     }
 
+    public async Task<IReadOnlyList<ScanSessionRecord>> ListSessionsAsync(int take, CancellationToken cancellationToken)
+    {
+        var sessions = new List<ScanSessionRecord>();
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, source_path, target_root, backup_root, action_mode, started_utc
+            FROM sessions
+            ORDER BY started_utc DESC
+            LIMIT $take
+            """;
+        command.Parameters.AddWithValue("$take", Math.Max(1, take));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            sessions.Add(new ScanSessionRecord(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                Enum.Parse<ScanActionMode>(reader.GetString(4)),
+                DateTimeOffset.Parse(reader.GetString(5))));
+        }
+
+        return sessions;
+    }
+
     public async Task<ScanSummary> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var results = await ListResultsAsync(sessionId, cancellationToken);

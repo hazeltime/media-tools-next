@@ -1,0 +1,107 @@
+@page "/results"
+@inject ScanWorkflowState State
+@inject FolderPickerService Picker
+@inject IReportExporter CsvExporter
+@implements IDisposable
+
+<div class="page-stack">
+    <header class="page-header"><p class="eyebrow">Review</p><h1>Results</h1><p>Structured scan results. Use filters instead of reading the full log.</p></header>
+    <section class="panel run-facts">
+        <h2>Scan status</h2>
+        <div class="info-grid">
+            <div><strong>@State.LastRunType</strong><span>Type</span></div>
+            <div><strong>@FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
+            <div><strong>@FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
+        </div>
+        <p class="muted">@State.LastRunSettings</p>
+        <p class="muted">Completion: @State.LastCompletionReason</p>
+    </section>
+    <section class="result-toolbar panel">
+        <label>Status
+            <select @bind="StatusFilter">
+                <option value="">All statuses</option>
+                @foreach (var status in Enum.GetValues<ValidationStatus>()) { <option value="@status.ToString()">@status</option> }
+            </select>
+        </label>
+        <label>Search path or detail <input @bind="SearchText" @bind:event="oninput" placeholder="filename, folder, validator detail..." /></label>
+        <label>Sort
+            <select @bind="State.ReportSort">
+                <option value="status-path">Status, then path</option>
+                <option value="path">Path</option>
+                <option value="size-desc">Largest first</option>
+            </select>
+        </label>
+        <button disabled="@(!State.Results.Any())" @onclick="ExportAsync">Export @State.ReportFormat.ToUpperInvariant()</button>
+    </section>
+    <section class="summary-grid">
+        <div><strong>@State.Results.Count</strong><span>Total</span></div>
+        @foreach (var status in Enum.GetValues<ValidationStatus>()) { <div><strong>@State.Results.Count(x => x.Status == status)</strong><span>@status</span></div> }
+    </section>
+    <section class="panel results-panel">
+        <div class="result-count"><strong>@FilteredRows.Count.ToString("N0")</strong><span>matching rows. Showing first @VisibleRows.Count.ToString("N0").</span></div>
+        <table class="results-table">
+            <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
+            <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
+            <tbody>
+                @foreach (var row in VisibleRows)
+                {
+                    <tr>
+                        <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
+                        <td>@row.Candidate.Category</td>
+                        <td title="@row.Candidate.FullPath"><span class="path-cell">@row.Candidate.RelativePath</span></td>
+                        <td>@FormatBytes(row.Candidate.SizeBytes)</td>
+                        <td>@row.Validator</td>
+                        <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
+                    </tr>
+                }
+                @if (VisibleRows.Count == 0)
+                {
+                    <tr><td colspan="6" class="empty-cell">No results match the current filter.</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</div>
+
+@code {
+    private string StatusFilter { get; set; } = string.Empty;
+    private string SearchText { get; set; } = string.Empty;
+    private List<ScanResultRecord> FilteredRows => Rows.Where(MatchesFilter).ToList();
+    private List<ScanResultRecord> VisibleRows => FilteredRows.Take(500).ToList();
+
+    private IEnumerable<ScanResultRecord> Rows => State.ReportSort switch
+    {
+        "path" => State.Results.OrderBy(x => x.Candidate.RelativePath),
+        "size-desc" => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
+        "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
+        _ => State.Results
+    };
+
+    protected override void OnInitialized() => State.Changed += OnStateChanged;
+
+    public void Dispose() => State.Changed -= OnStateChanged;
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private bool MatchesFilter(ScanResultRecord row)
+    {
+        if (!string.IsNullOrWhiteSpace(StatusFilter) && !string.Equals(row.Status.ToString(), StatusFilter, StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.IsNullOrWhiteSpace(SearchText)) return true;
+        return row.Candidate.RelativePath.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
+            || row.Candidate.FullPath.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
+            || (row.Detail?.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ?? false)
+            || row.Validator.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ExportAsync()
+    {
+        var path = await Picker.PickCsvSavePathAsync("media-tools-results." + State.ReportFormat);
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (State.ReportFormat == "csv") await CsvExporter.ExportCsvAsync(Rows, path, CancellationToken.None);
+        else await File.WriteAllLinesAsync(path, Rows.Select(x => $"{x.Status}\t{x.Candidate.Category}\t{x.Candidate.RelativePath}\t{x.Detail}"));
+        State.Message = "Exported results: " + path;
+    }
+
+    private static string FormatBytes(long bytes) => bytes >= 1048576 ? (bytes / 1048576d).ToString("N1") + " MB" : bytes + " B";
+    private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+}

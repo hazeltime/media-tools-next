@@ -12,6 +12,8 @@ public sealed class ScannerPipeline(
 {
     public async Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
     {
+        using var runtimeCts = CreateRuntimeCancellation(options, cancellationToken);
+        var runToken = runtimeCts?.Token ?? cancellationToken;
         await store.InitializeAsync(cancellationToken);
         var sessionId = await store.CreateSessionAsync(options, cancellationToken);
         var channel = Channel.CreateBounded<FileCandidate>(new BoundedChannelOptions(Math.Max(16, options.MaxConcurrency * 4))
@@ -25,36 +27,50 @@ public sealed class ScannerPipeline(
         {
             try
             {
-                await foreach (var candidate in discoverer.DiscoverAsync(options, cancellationToken))
-                    await channel.Writer.WriteAsync(candidate, cancellationToken);
+                await foreach (var candidate in discoverer.DiscoverAsync(options, runToken))
+                    await channel.Writer.WriteAsync(candidate, runToken);
+                channel.Writer.TryComplete();
+            }
+            catch (OperationCanceledException) when (runToken.IsCancellationRequested)
+            {
+                options.LimitState?.StopAfterWorkStarted(RuntimeStopReason(options));
                 channel.Writer.TryComplete();
             }
             catch (Exception ex)
             {
                 channel.Writer.TryComplete(ex);
             }
-        }, cancellationToken);
+        }, runToken);
 
         var workers = Enumerable.Range(0, Math.Max(1, options.MaxConcurrency)).Select(_ => Task.Run(async () =>
         {
-            await foreach (var candidate in channel.Reader.ReadAllAsync(cancellationToken))
+            await foreach (var candidate in channel.Reader.ReadAllAsync(runToken))
             {
-                await control.WaitIfPausedAsync(cancellationToken);
-                await ProcessCandidateAsync(sessionId, candidate, options, progress, cancellationToken);
+                await control.WaitIfPausedAsync(runToken);
+                await ProcessCandidateAsync(sessionId, candidate, options, progress, runToken);
             }
-        }, cancellationToken)).ToArray();
+        }, runToken)).ToArray();
 
-        await producer;
-        await Task.WhenAll(workers);
-        return await store.GetSummaryAsync(sessionId, cancellationToken);
+        try
+        {
+            await producer;
+            await Task.WhenAll(workers);
+        }
+        catch (OperationCanceledException) when (runToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            options.LimitState?.StopAfterWorkStarted(RuntimeStopReason(options));
+        }
+
+        var summary = await store.GetSummaryAsync(sessionId, cancellationToken);
+        return summary with { CompletionReason = options.LimitState?.StopReason ?? summary.CompletionReason };
     }
 
     private async Task ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
     {
-        var reusable = await store.FindReusableResultAsync(candidate, cancellationToken);
+        var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
         if (reusable is not null)
         {
-            var resumed = new ScanResultRecord(sessionId, candidate, ValidationStatus.Skipped, reusable.Validator, "resume_unchanged: " + reusable.Status, "skipped", null, null, DateTimeOffset.UtcNow);
+            var resumed = new ScanResultRecord(sessionId, candidate, reusable.Status, reusable.Validator, "cache_reused_previous_validation", "cached", null, null, DateTimeOffset.UtcNow);
             await store.SaveResultAsync(resumed, cancellationToken);
             progress?.Report(resumed);
             return;
@@ -90,4 +106,19 @@ public sealed class ScannerPipeline(
             catch (IOException) when (attempt < options.MaxRetries) { await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken); }
         }
     }
+
+    private static CancellationTokenSource? CreateRuntimeCancellation(ScanOptions options, CancellationToken cancellationToken)
+    {
+        if (options.MaxRuntimeSeconds is not int seconds || seconds <= 0)
+            return null;
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(seconds));
+        return cts;
+    }
+
+    private static string RuntimeStopReason(ScanOptions options) =>
+        options.MaxRuntimeSeconds is int seconds && seconds > 0
+            ? $"Stopped after reaching the {seconds:N0}s time limit."
+            : "Cancelled.";
 }

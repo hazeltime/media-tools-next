@@ -1,0 +1,32 @@
+@page "/validation"
+@inject ScanWorkflowState State
+@inject IExternalToolProbe ToolProbe
+
+<div class="page-stack">
+    <header class="page-header"><p class="eyebrow">Step 3</p><h1>Validation depth</h1><p>Choose how hard the app tries to prove an image is actually readable.</p></header>
+    <section class="panel">
+        <div class="card-grid three">
+            @foreach (var depth in Enum.GetValues<ValidationDepth>())
+            {
+                <button class="select-card @(State.ValidationDepth == depth ? "active" : "")" @onclick="() => State.ValidationDepth = depth">
+                    <strong>@ScanWorkflowState.DepthLabel(depth)</strong>
+                    <span>@ScanWorkflowState.DepthExplanation(depth)</span>
+                </button>
+            }
+        </div>
+    </section>
+    <section class="panel">
+        <h2>Tools and performance</h2>
+        <div class="tool-row">
+            @foreach (var tool in ToolProbe.GetStatuses()) { <span class="tool @(tool.IsAvailable ? "ok" : "missing")">@tool.Name</span> }
+        </div>
+        <div class="form-grid three">
+            <label>Concurrency: @State.Concurrency <input type="range" min="1" max="32" @bind="State.Concurrency" /></label>
+            <label>Tool timeout seconds <input type="number" min="5" max="600" @bind="State.ToolTimeoutSeconds" /></label>
+            @if (State.EnableAudio || State.EnableVideo)
+            {
+                <label>Media probe seconds <input type="number" min="10" max="600" @bind="State.ProbeSeconds" /></label>
+            }
+        </div>
+    </section>
+</div>

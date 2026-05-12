@@ -7,5 +7,13 @@ public sealed record ScanSummary(
     int Corrupt,
     int Unknown,
     int Errors,
-    int Skipped);
+    int Skipped,
+    string CompletionReason = "Source exhausted");
 
+public sealed record ScanSessionRecord(
+    Guid SessionId,
+    string SourcePath,
+    string TargetRoot,
+    string? BackupRoot,
+    ScanActionMode ActionMode,
+    DateTimeOffset StartedUtc);

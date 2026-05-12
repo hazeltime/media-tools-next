@@ -1,0 +1,66 @@
+@page "/setup"
+@inject ScanWorkflowState State
+@inject FolderPickerService Picker
+
+<div class="page-stack">
+    <header class="page-header">
+        <p class="eyebrow">Step 1</p>
+        <h1>Setup</h1>
+        <p>Choose the source folder and what the app may write. Source files are read only.</p>
+    </header>
+
+    <section class="panel">
+        <div class="form-grid">
+            <label>Source folder <small>Scanned recursively. Originals are not changed.</small><div class="input-action"><input @bind="State.SourcePath" /><button @onclick="PickSource">Browse</button></div></label>
+            @if (State.Mode != ScanActionMode.DryRun)
+            {
+                <label>Target folder <small>Sorted copies are written here by outcome.</small><div class="input-action"><input @bind="State.TargetRoot" /><button @onclick="PickTarget">Browse</button></div></label>
+            }
+            @if (State.Mode == ScanActionMode.CopySortedAndBackup)
+            {
+                <label>Backup folder <small>Receives a mirror of sorted target copies.</small><div class="input-action"><input @bind="State.BackupRoot" /><button @onclick="PickBackup">Browse</button></div></label>
+            }
+        </div>
+        <div class="info-grid">
+            <div><strong>Source</strong><span>Read-only. Files are opened for validation only.</span></div>
+            <div><strong>Target</strong><span>Used only by copy modes. Creates valid/corrupt/unknown/error folders.</span></div>
+            <div><strong>Backup</strong><span>Used only by copy sorted + backup.</span></div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Mode</h2>
+        <div class="card-grid three">
+            <button class="select-card @(State.Mode == ScanActionMode.DryRun ? "active" : "")" @onclick="() => SetMode(ScanActionMode.DryRun)"><strong>Log only</strong><span>Validate and record results. No target writes.</span></button>
+            <button class="select-card @(State.Mode == ScanActionMode.CopySorted ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySorted)"><strong>Copy sorted</strong><span>Copy selected outcomes to target.</span></button>
+            <button class="select-card @(State.Mode == ScanActionMode.CopySortedAndBackup ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySortedAndBackup)"><strong>Copy + backup</strong><span>Copy to target and mirror to backup.</span></button>
+        </div>
+        @if (State.Mode != ScanActionMode.DryRun)
+        {
+            <label class="choice confirm"><input type="checkbox" @bind="State.ConfirmedLiveMode" /> I understand this mode writes file copies.</label>
+        }
+    </section>
+
+    <section class="panel">
+        <h2>Hard limits</h2>
+        <p class="muted">Limits count matched files only. The size cap is the total size of all matched files, not a per-file limit.</p>
+        <div class="form-grid three">
+            <label>Max scan seconds <input type="number" min="0" @bind="State.MaxRuntimeSeconds" /></label>
+            <label>@(State.IsImageOnly ? "Max image files" : "Max matched files") <input type="number" min="0" @bind="State.MaxMatchedFiles" /></label>
+            <label>@(State.IsImageOnly ? "Max total image MB" : "Max total matched MB") <input type="number" min="0" @bind="State.MaxMatchedMb" /></label>
+        </div>
+        <div class="button-row">
+            <button @onclick="Defaults">Default limits</button>
+            <button class="secondary" @onclick="Clear">Unlimited</button>
+        </div>
+    </section>
+</div>
+
+@code {
+    private async Task PickSource() => State.SourcePath = await Picker.PickFolderAsync("Select source folder", State.SourcePath) ?? State.SourcePath;
+    private async Task PickTarget() => State.TargetRoot = await Picker.PickFolderAsync("Select target folder", State.TargetRoot) ?? State.TargetRoot;
+    private async Task PickBackup() => State.BackupRoot = await Picker.PickFolderAsync("Select backup folder", State.BackupRoot) ?? State.BackupRoot;
+    private void SetMode(ScanActionMode mode) { if (State.Mode != mode) State.ConfirmedLiveMode = false; State.Mode = mode; }
+    private void Defaults() { State.MaxRuntimeSeconds = 30; State.MaxMatchedFiles = 10000; State.MaxMatchedMb = 10240; }
+    private void Clear() { State.MaxRuntimeSeconds = 0; State.MaxMatchedFiles = 0; State.MaxMatchedMb = 0; }
+}

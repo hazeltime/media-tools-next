@@ -1,0 +1,11 @@
+@page "/help"
+
+<div class="page-stack">
+    <header class="page-header"><p class="eyebrow">Reference</p><h1>Help</h1><p>The MVP is image corruption auditing and separation.</p></header>
+    <section class="panel help-panel">
+        <details open><summary>What happens to source files?</summary><p>Source files are read for validation. The app does not modify, move, rename, or delete originals.</p></details>
+        <details open><summary>What is copied?</summary><p>Copy modes copy only selected outcomes to target folders such as valid, corrupt, unknown, and error.</p></details>
+        <details><summary>What do check levels mean?</summary><p>Quick checks headers. Medium adds ImageMagick metadata validation. In-depth asks ImageMagick to read the image.</p></details>
+        <details><summary>What do limits count?</summary><p>Limits count matched files only. In image-only mode, max files means max image files.</p></details>
+    </section>
+</div>

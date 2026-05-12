@@ -25,7 +25,17 @@ public sealed record ScanOptions(
     long? MinScannedBytes = null,
     long? MaxScannedBytes = null,
     long? MinMatchedBytes = null,
-    long? MaxMatchedBytes = null)
+    long? MaxMatchedBytes = null,
+    int? MaxRuntimeSeconds = null,
+    bool ForceRescan = false,
+    ScanLimitState? LimitState = null,
+    IReadOnlySet<string>? CustomImageExtensions = null,
+    string? CustomImageRegex = null,
+    long? MinCandidateBytes = null,
+    long? MaxCandidateBytes = null,
+    IReadOnlyList<string>? IncludeFileNamePatterns = null,
+    IReadOnlyList<string>? ExcludeFileNamePatterns = null,
+    IReadOnlySet<ValidationStatus>? ActionStatuses = null)
 {
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
         new(
@@ -40,4 +50,20 @@ public sealed record ScanOptions(
             MaxConcurrency: Math.Max(1, Environment.ProcessorCount / 2),
             MediaProbeSeconds: 120,
             databasePath);
+}
+
+public sealed class ScanLimitState
+{
+    public string? StopReason { get; private set; }
+
+    public void Stop(string reason)
+    {
+        StopReason ??= reason;
+    }
+
+    public void StopAfterWorkStarted(string reason)
+    {
+        if (StopReason is null or "Source exhausted.")
+            StopReason = reason;
+    }
 }

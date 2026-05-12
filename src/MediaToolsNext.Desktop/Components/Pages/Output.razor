@@ -1,0 +1,33 @@
+@page "/output"
+@inject ScanWorkflowState State
+
+<div class="page-stack">
+    <header class="page-header"><p class="eyebrow">Step 4</p><h1>Output</h1><p>Choose what to log/export and which outcomes copy modes should separate.</p></header>
+    <section class="panel">
+        <h2>Copy outcomes</h2>
+        <p class="muted">Dry run logs all outcomes. Copy modes copy only selected outcomes.</p>
+        <div class="form-grid four">
+            @foreach (var status in Copyable)
+            {
+                <label class="choice"><input type="checkbox" checked="@State.CopyStatuses.Contains(status)" @onchange="e => Toggle(status, (bool)e.Value!)" /> @status</label>
+            }
+        </div>
+    </section>
+    <section class="panel">
+        <h2>Report defaults</h2>
+        <div class="form-grid three">
+            <label>Format <select @bind="State.ReportFormat"><option value="csv">CSV</option><option value="txt">TXT</option></select></label>
+            <label>Sort <select @bind="State.ReportSort"><option value="status-path">Status then path</option><option value="path">Path</option><option value="size-desc">Largest first</option><option value="time">Scan order</option></select></label>
+            <label class="choice"><input type="checkbox" @bind="State.GroupReportByStatus" /> Group by status</label>
+        </div>
+    </section>
+</div>
+
+@code {
+    private static readonly ValidationStatus[] Copyable = [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
+    private void Toggle(ValidationStatus status, bool enabled)
+    {
+        if (enabled) State.CopyStatuses.Add(status);
+        else State.CopyStatuses.Remove(status);
+    }
+}

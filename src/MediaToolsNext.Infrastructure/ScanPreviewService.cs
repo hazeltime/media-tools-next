@@ -8,24 +8,18 @@ public sealed class ScanPreviewService(IFileDiscoverer discoverer) : IScanPrevie
     {
         var counts = Enum.GetValues<MediaCategory>().ToDictionary(x => x, _ => 0);
         var total = 0;
-        var dirs = 0;
+        var dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long bytes = 0;
-        string? lastDir = null;
         await foreach (var candidate in discoverer.DiscoverAsync(options, cancellationToken))
         {
             total++;
             bytes += candidate.SizeBytes;
             counts[candidate.Category]++;
-            var dir = Path.GetDirectoryName(candidate.RelativePath);
-            if (!string.Equals(dir, lastDir, StringComparison.OrdinalIgnoreCase))
-            {
-                dirs++;
-                lastDir = dir;
-            }
+            dirs.Add(Path.GetDirectoryName(candidate.RelativePath) ?? string.Empty);
             if (total % 250 == 0)
-                progress?.Report(new ScanPreview(total, dirs, bytes, counts));
+                progress?.Report(new ScanPreview(total, dirs.Count, bytes, counts));
         }
-        var preview = new ScanPreview(total, dirs, bytes, counts);
+        var preview = new ScanPreview(total, dirs.Count, bytes, counts);
         progress?.Report(preview);
         return preview;
     }

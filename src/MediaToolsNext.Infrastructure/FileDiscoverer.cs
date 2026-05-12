@@ -1,4 +1,5 @@
 using MediaToolsNext.Core;
+using System.Text.RegularExpressions;
 
 namespace MediaToolsNext.Infrastructure;
 
@@ -15,6 +16,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
         if (!Directory.Exists(source))
             yield break;
 
+        var excludedRoots = GetExcludedRoots(source, options);
         var pending = new Queue<string>();
         pending.Enqueue(source);
         var started = DateTimeOffset.UtcNow;
@@ -26,19 +28,27 @@ public sealed class FileDiscoverer : IFileDiscoverer
         var matchedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var maxSearchedDirs = options.MaxSearchedDirectories ?? options.MaxDirectories;
         var maxMatchedFiles = options.MaxMatchedFiles ?? options.MaxFiles;
+        var customImageRegex = CreateRegex(options.CustomImageRegex);
+        var includePatterns = CompileWildcards(options.IncludeFileNamePatterns);
+        var excludePatterns = CompileWildcards(options.ExcludeFileNamePatterns);
 
         while (pending.Count > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (LimitsActive() && maxSearchedDirs is int maxDirs && searchedDirs >= maxDirs)
+            if (ShouldStopForRuntime())
                 yield break;
+            if (maxSearchedDirs is int maxDirs && searchedDirs >= maxDirs)
+            {
+                Stop($"Stopped after visiting {maxDirs:N0} searched folders.");
+                yield break;
+            }
 
             var current = pending.Dequeue();
             searchedDirs++;
 
             foreach (var dir in SafeEnumerateDirectories(current))
             {
-                if (!ExcludedDirectoryNames.Contains(Path.GetFileName(dir)))
+                if (!ExcludedDirectoryNames.Contains(Path.GetFileName(dir)) && !IsExcludedRoot(dir, excludedRoots))
                     pending.Enqueue(dir);
             }
 
@@ -50,17 +60,37 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
                 searchedFiles++;
                 scannedBytes += info.Exists ? info.Length : 0;
-                if (LimitsActive() && ShouldStopBeforeNextMatch())
+                if (ShouldStopForRuntime() || ShouldStopBeforeNextMatch())
                     yield break;
+                if (!MatchesFileFilters(info, includePatterns, excludePatterns))
+                    continue;
 
                 var ext = Path.GetExtension(file).ToLowerInvariant();
-                var category = SupportedMedia.GetCategory(ext);
+                var category = GetCategory(file, ext, options, customImageRegex);
                 if (category == MediaCategory.Unknown || !IsEnabled(category, options))
                     continue;
+                if (options.MinCandidateBytes is long minBytes && info.Length < minBytes)
+                    continue;
+                if (options.MaxCandidateBytes is long maxBytes && info.Length > maxBytes)
+                    continue;
+                if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + info.Length > maxMatchedBytes)
+                {
+                    Stop($"Stopped before exceeding the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
+                    yield break;
+                }
+
+                var matchDir = Path.GetDirectoryName(info.FullName);
+                if (options.MaxMatchedDirectories is int maxMatchedDirs
+                    && !string.IsNullOrWhiteSpace(matchDir)
+                    && !matchedDirs.Contains(matchDir)
+                    && matchedDirs.Count >= maxMatchedDirs)
+                {
+                    Stop($"Stopped after finding files in {maxMatchedDirs:N0} matched folders.");
+                    yield break;
+                }
 
                 matchedFiles++;
                 matchedBytes += info.Exists ? info.Length : 0;
-                var matchDir = Path.GetDirectoryName(info.FullName);
                 if (!string.IsNullOrWhiteSpace(matchDir))
                     matchedDirs.Add(matchDir);
 
@@ -75,23 +105,50 @@ public sealed class FileDiscoverer : IFileDiscoverer
             }
         }
 
-        bool LimitsActive()
+        options.LimitState?.Stop("Source exhausted.");
+
+        bool ShouldStopForRuntime()
         {
-            var runtimeOk = (DateTimeOffset.UtcNow - started).TotalSeconds >= Math.Max(0, options.MinRuntimeBeforeLimitsSeconds);
-            var minScannedOk = options.MinScannedBytes is not long minScanned || scannedBytes >= minScanned;
-            var minMatchedOk = options.MinMatchedBytes is not long minMatched || matchedBytes >= minMatched;
-            return runtimeOk && minScannedOk && minMatchedOk;
+            if (options.MaxRuntimeSeconds is not int maxSeconds || maxSeconds <= 0)
+                return false;
+
+            if ((DateTimeOffset.UtcNow - started).TotalSeconds < maxSeconds)
+                return false;
+
+            Stop($"Stopped after reaching the {maxSeconds:N0}s time limit.");
+            return true;
         }
 
         bool ShouldStopBeforeNextMatch()
         {
-            if (options.MaxSearchedFiles is int maxSearchedFiles && searchedFiles > maxSearchedFiles) return true;
-            if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes) return true;
-            if (maxMatchedFiles is int maxFiles && matchedFiles >= maxFiles) return true;
-            if (options.MaxMatchedDirectories is int maxMatchedDirs && matchedDirs.Count >= maxMatchedDirs) return true;
-            if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes >= maxMatchedBytes) return true;
+            if (options.MaxSearchedFiles is int maxSearchedFiles && searchedFiles > maxSearchedFiles)
+            {
+                Stop($"Stopped after inspecting {maxSearchedFiles:N0} searched files.");
+                return true;
+            }
+
+            if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes)
+            {
+                Stop($"Stopped after inspecting {FormatBytes(maxScannedBytes)} of searched data.");
+                return true;
+            }
+
+            if (maxMatchedFiles is int maxFiles && matchedFiles >= maxFiles)
+            {
+                Stop($"Stopped after matching {maxFiles:N0} files.");
+                return true;
+            }
+
+            if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes >= maxMatchedBytes)
+            {
+                Stop($"Stopped after reaching the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
+                return true;
+            }
+
             return false;
         }
+
+        void Stop(string reason) => options.LimitState?.Stop(reason);
     }
 
     private static bool IsEnabled(MediaCategory category, ScanOptions options) => category switch
@@ -103,15 +160,94 @@ public sealed class FileDiscoverer : IFileDiscoverer
         _ => false
     };
 
+    private static MediaCategory GetCategory(string file, string extension, ScanOptions options, Regex? customImageRegex)
+    {
+        if (SupportedMedia.GetCategory(extension) is { } category && category != MediaCategory.Unknown)
+            return category;
+
+        if (options.CustomImageExtensions?.Contains(extension) == true)
+            return MediaCategory.Image;
+
+        return customImageRegex?.IsMatch(Path.GetFileName(file)) == true ? MediaCategory.Image : MediaCategory.Unknown;
+    }
+
+    private static Regex? CreateRegex(string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+            return null;
+
+        return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    }
+
+    private static bool MatchesFileFilters(FileInfo info, IReadOnlyList<Regex> includePatterns, IReadOnlyList<Regex> excludePatterns)
+    {
+        var name = info.Name;
+        if (includePatterns.Count > 0 && !includePatterns.Any(x => x.IsMatch(name)))
+            return false;
+        if (excludePatterns.Any(x => x.IsMatch(name)))
+            return false;
+        return true;
+    }
+
+    private static IReadOnlyList<Regex> CompileWildcards(IReadOnlyList<string>? patterns) =>
+        patterns?
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => "^" + Regex.Escape(x.Trim()).Replace("\\*", ".*").Replace("\\?", ".") + "$")
+            .Select(x => new Regex(x, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled))
+            .ToArray() ?? [];
+
     private static IEnumerable<string> SafeEnumerateDirectories(string path)
     {
-        try { return Directory.EnumerateDirectories(path); }
+        try { return Directory.EnumerateDirectories(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase); }
         catch { return []; }
     }
 
     private static IEnumerable<string> SafeEnumerateFiles(string path)
     {
-        try { return Directory.EnumerateFiles(path); }
+        try { return Directory.EnumerateFiles(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase); }
         catch { return []; }
+    }
+
+    private static IReadOnlySet<string> GetExcludedRoots(string source, ScanOptions options)
+    {
+        var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddIfInsideSource(options.TargetRoot);
+        AddIfInsideSource(options.BackupRoot);
+        return roots;
+
+        void AddIfInsideSource(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            var fullPath = Path.GetFullPath(path);
+            if (!PathsEqual(source, fullPath) && IsSameOrChildPath(source, fullPath))
+                roots.Add(NormalizeDirectory(fullPath));
+        }
+    }
+
+    private static bool IsExcludedRoot(string path, IReadOnlySet<string> excludedRoots) =>
+        excludedRoots.Contains(NormalizeDirectory(path));
+
+    private static bool IsSameOrChildPath(string parent, string path)
+    {
+        var normalizedParent = NormalizeDirectory(parent);
+        var normalizedPath = NormalizeDirectory(path);
+        return normalizedPath.Equals(normalizedParent, StringComparison.OrdinalIgnoreCase)
+            || normalizedPath.StartsWith(normalizedParent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool PathsEqual(string left, string right) =>
+        NormalizeDirectory(left).Equals(NormalizeDirectory(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeDirectory(string path) =>
+        Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1073741824L) return (bytes / 1073741824d).ToString("N2") + " GB";
+        if (bytes >= 1048576L) return (bytes / 1048576d).ToString("N1") + " MB";
+        if (bytes >= 1024L) return (bytes / 1024d).ToString("N1") + " KB";
+        return bytes + " B";
     }
 }

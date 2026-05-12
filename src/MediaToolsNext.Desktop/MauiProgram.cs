@@ -14,6 +14,7 @@ public static class MauiProgram
 
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddSingleton<FolderPickerService>();
+        builder.Services.AddSingleton<ScanWorkflowState>();
         builder.Services.AddMediaToolsNext(_ =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db"));
 

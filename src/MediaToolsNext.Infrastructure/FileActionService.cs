@@ -8,16 +8,18 @@ public sealed class FileActionService : IFileActionService
     {
         if (options.ActionMode == ScanActionMode.DryRun)
             return FileActionOutcome.DryRun();
+        if (options.ActionStatuses is { Count: > 0 } statuses && !statuses.Contains(outcome.Status))
+            return new FileActionOutcome("not-copied-status-filter", null, null, null);
 
         var statusFolder = outcome.Status == ValidationStatus.Valid ? "valid" : outcome.Status.ToString().ToLowerInvariant();
-        var primaryTarget = GetSafePath(Path.Combine(options.TargetRoot, statusFolder, outcome.Candidate.RelativePath));
+        var primaryTarget = GetSafePath(CombineOutputPath(options.TargetRoot, statusFolder, outcome.Candidate.RelativePath));
         Directory.CreateDirectory(Path.GetDirectoryName(primaryTarget)!);
         await CopyAsync(outcome.Candidate.FullPath, primaryTarget, cancellationToken);
 
         string? backupTarget = null;
         if (options.ActionMode == ScanActionMode.CopySortedAndBackup && !string.IsNullOrWhiteSpace(options.BackupRoot))
         {
-            backupTarget = GetSafePath(Path.Combine(options.BackupRoot, statusFolder, outcome.Candidate.RelativePath));
+            backupTarget = GetSafePath(CombineOutputPath(options.BackupRoot, statusFolder, outcome.Candidate.RelativePath));
             Directory.CreateDirectory(Path.GetDirectoryName(backupTarget)!);
             await CopyAsync(primaryTarget, backupTarget, cancellationToken);
         }
@@ -44,5 +46,10 @@ public sealed class FileActionService : IFileActionService
             if (!File.Exists(candidate)) return candidate;
         }
     }
-}
 
+    private static string CombineOutputPath(string root, string statusFolder, string relativePath)
+    {
+        var parts = relativePath.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        return Path.Combine([root, statusFolder, .. parts]);
+    }
+}

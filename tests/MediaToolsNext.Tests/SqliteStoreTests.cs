@@ -48,4 +48,25 @@ public class SqliteStoreTests
         }
         finally { Directory.Delete(root, true); }
     }
+
+    [Fact]
+    public async Task ListsRecentSessions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            var db = Path.Combine(root, "state.db");
+            var store = new SqliteScanStore(db);
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db);
+            await store.InitializeAsync(CancellationToken.None);
+            var session = await store.CreateSessionAsync(options, CancellationToken.None);
+
+            var sessions = await store.ListSessionsAsync(10, CancellationToken.None);
+
+            Assert.Contains(sessions, x => x.SessionId == session);
+            Assert.Equal(root, sessions.Single(x => x.SessionId == session).SourcePath);
+        }
+        finally { Directory.Delete(root, true); }
+    }
 }

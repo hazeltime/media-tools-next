@@ -11,17 +11,18 @@ public class ScanProfileTests
     }
 
     [Fact]
-    public void PhotosProfileDisablesNonImages()
+    public void ImageProfilesDisableNonImages()
     {
-        var profile = ScanProfiles.Get("photos");
+        var profile = ScanProfiles.Get("standard-images");
         Assert.True(profile.EnableImages);
         Assert.False(profile.EnableVideo);
         Assert.False(profile.EnableAudio);
+        Assert.False(profile.EnableDocuments);
     }
 
     [Fact]
-    public void DeepSortUsesDeepValidation()
+    public void DeepImageProfileUsesDeepValidation()
     {
-        Assert.Equal(ValidationDepth.Deep, ScanProfiles.DeepSort.ValidationDepth);
+        Assert.Equal(ValidationDepth.Deep, ScanProfiles.DeepImages.ValidationDepth);
     }
 }

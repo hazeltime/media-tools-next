@@ -25,6 +25,196 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task DiscoverySkipsConfiguredTargetAndBackupInsideSource()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var target = Path.Combine(root, "sorted-output");
+            var backup = Path.Combine(root, "backup-output");
+            Directory.CreateDirectory(target);
+            Directory.CreateDirectory(backup);
+            File.WriteAllText(Path.Combine(root, "photo.jpg"), "x");
+            File.WriteAllText(Path.Combine(target, "target-copy.jpg"), "x");
+            File.WriteAllText(Path.Combine(backup, "backup-copy.jpg"), "x");
+
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                BackupRoot = backup
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal("photo.jpg", files[0].RelativePath);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryIncludesCustomImageExtensions()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "image.jxl"), "x");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                CustomImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jxl" }
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal(MediaCategory.Image, files[0].Category);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryIncludesCustomImageRegexMatches()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "IMG_001.bin"), "x");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                CustomImageRegex = "^IMG_.*\\.bin$"
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal(MediaCategory.Image, files[0].Category);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryAppliesSizeAndWildcardFilters()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "IMG_keep.jpg"), new string('x', 2048));
+            File.WriteAllText(Path.Combine(root, "IMG_small.jpg"), "x");
+            File.WriteAllText(Path.Combine(root, "thumb_keep.jpg"), new string('x', 2048));
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MinCandidateBytes = 1024,
+                IncludeFileNamePatterns = ["IMG_*"],
+                ExcludeFileNamePatterns = ["*_small.*"]
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal("IMG_keep.jpg", files[0].RelativePath);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryAppliesFiltersBeforeMatchedFileLimit()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_too_small.jpg"), "x");
+            File.WriteAllText(Path.Combine(root, "B_keep.jpg"), new string('x', 2048));
+            File.WriteAllText(Path.Combine(root, "C_second.jpg"), new string('x', 2048));
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MinCandidateBytes = 1024,
+                MaxMatchedFiles = 1
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal("B_keep.jpg", files[0].RelativePath);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryAppliesMaxCandidateSizeBeforeMatchedFileLimit()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_too_large.jpg"), new string('x', 2048));
+            File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "ok");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MaxCandidateBytes = 1024,
+                MaxMatchedFiles = 1
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal("B_keep.jpg", files[0].RelativePath);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryAppliesWildcardFiltersBeforeMatchedFileLimit()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_skip.jpg"), "x");
+            File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "x");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                IncludeFileNamePatterns = ["B_*"],
+                MaxMatchedFiles = 1
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal("B_keep.jpg", files[0].RelativePath);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DryRunActionDoesNotCopy()
     {
         var root = NewTempDir();
@@ -42,6 +232,89 @@ public class DiscoveryAndActionTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task CopySortedWritesStatusFolderCopy()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted
+            };
+
+            var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
+
+            var copied = Path.Combine(target, "valid", "docs", "a.txt");
+            Assert.Equal("copied", action.Action);
+            Assert.Equal(copied, action.PrimaryTargetPath);
+            Assert.True(File.Exists(copied));
+            Assert.Equal("hello", File.ReadAllText(copied));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task CopySortedAndBackupWritesTargetAndBackupCopies()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            var backup = Path.Combine(root, "backup");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Corrupt, "test", "broken", TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySortedAndBackup,
+                BackupRoot = backup
+            };
+
+            var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
+
+            var targetCopy = Path.Combine(target, "corrupt", "docs", "a.txt");
+            var backupCopy = Path.Combine(backup, "corrupt", "docs", "a.txt");
+            Assert.Equal("copied", action.Action);
+            Assert.Equal(targetCopy, action.PrimaryTargetPath);
+            Assert.Equal(backupCopy, action.BackupTargetPath);
+            Assert.True(File.Exists(targetCopy));
+            Assert.True(File.Exists(backupCopy));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task CopySortedSkipsUnselectedOutcomes()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                ActionStatuses = new HashSet<ValidationStatus> { ValidationStatus.Corrupt }
+            };
+
+            var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
+
+            Assert.Equal("not-copied-status-filter", action.Action);
+            Assert.False(Directory.Exists(target));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private static string NewTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
@@ -49,4 +322,3 @@ public class DiscoveryAndActionTests
         return path;
     }
 }
-
