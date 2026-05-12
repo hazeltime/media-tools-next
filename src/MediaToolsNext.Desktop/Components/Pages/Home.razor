@@ -206,20 +206,20 @@
 </div>
 
 @code {
-    private string _sourcePath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-    private string _targetRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "_media_tools_next");
-    private string? _backupRoot;
-    private int _concurrency = Math.Max(1, Environment.ProcessorCount / 2);
-    private int _probeSeconds = 60;
-    private int _toolTimeoutSeconds = 20;
-    private int _maxFiles;
-    private int _maxDirectories;
+    private string _sourcePath = @"E:\q";
+    private string _targetRoot = @"E:\_output_";
+    private string? _backupRoot = @"G:\_backup_";
+    private int _concurrency = 4;
+    private int _probeSeconds = 10;
+    private int _toolTimeoutSeconds = 30;
+    private int _maxFiles = 100;
+    private int _maxDirectories = 1000;
     private ScanActionMode _mode = ScanActionMode.DryRun;
     private ValidationDepth _validationDepth = ValidationDepth.Fast;
     private bool _enableImages = true;
-    private bool _enableVideo = true;
-    private bool _enableAudio = true;
-    private bool _enableDocuments = true;
+    private bool _enableVideo;
+    private bool _enableAudio;
+    private bool _enableDocuments;
     private bool _running;
     private bool _previewRunning;
     private bool _confirmedLiveMode;
