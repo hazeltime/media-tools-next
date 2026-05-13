@@ -71,7 +71,7 @@
             </div>
 
             <!-- Row 2: validation outcomes -->
-            <p class="live-counts-group-label" style="margin-top:0.75rem">Outcomes</p>
+            <p class="live-counts-group-label">Outcomes</p>
             <div class="live-counts">
                 <div class="live-count valid">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Valid).ToString("N0")</span>
@@ -100,7 +100,7 @@
             </div>
 
             <!-- Row 3: time -->
-            <p class="live-counts-group-label" style="margin-top:0.75rem">Time</p>
+            <p class="live-counts-group-label">Time</p>
             <div class="live-counts">
                 <div class="live-count perf">
                     <span class="live-count-value">@FormatElapsed(State.Elapsed)</span>

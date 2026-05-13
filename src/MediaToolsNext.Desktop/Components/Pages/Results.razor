@@ -287,7 +287,7 @@
         _visibleRows   = filtered.Take(500).ToList();
     }
 
-    // ── Clipboard helpers ─────────────────────────────────────────────────────
+    // ── Clipboard helpers ────────────────────────────────────────────────────
     private Task CopyCorruptPaths()  => CopyPathsForStatus(ValidationStatus.Corrupt);
     private Task CopyValidPaths()    => CopyPathsForStatus(ValidationStatus.Valid);
     private Task CopyUnknownPaths()  => CopyPathsForStatus(ValidationStatus.Unknown);
@@ -308,7 +308,7 @@
         State.NotifyChanged();
     }
 
-    // ── Folder open helpers ───────────────────────────────────────────────────
+    // ── Folder open helpers ───────────────────────────────────────────────
     private void OpenValidFolder()   => OpenFolder(Path.Combine(State.TargetRoot, "valid"));
     private void OpenCorruptFolder() => OpenFolder(Path.Combine(State.TargetRoot, "corrupt"));
 
@@ -319,7 +319,7 @@
         catch { /* ignore */ }
     }
 
-    // ── Export helpers ────────────────────────────────────────────────────────
+    // ── Export helpers ────────────────────────────────────────────────────
     private async Task ExportAsync() => await ExportFilteredAsync(null);
 
     private async Task ExportFilteredAsync(ValidationStatus? status)
