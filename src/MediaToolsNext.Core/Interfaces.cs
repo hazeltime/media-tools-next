@@ -2,7 +2,10 @@ namespace MediaToolsNext.Core;
 
 public interface IFileDiscoverer
 {
-    IAsyncEnumerable<FileCandidate> DiscoverAsync(ScanOptions options, CancellationToken cancellationToken);
+    IAsyncEnumerable<FileCandidate> DiscoverAsync(
+        ScanOptions options,
+        CancellationToken cancellationToken,
+        IProgress<ScanDiscoveryEvent>? discoveryProgress = null);
 }
 
 public interface IMediaValidator
@@ -42,7 +45,11 @@ public interface IExternalToolProbe
 
 public interface IScannerPipeline
 {
-    Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken);
+    Task<ScanSummary> RunAsync(
+        ScanOptions options,
+        IProgress<ScanResultRecord>? progress,
+        CancellationToken cancellationToken,
+        IProgress<ScanDiscoveryEvent>? discoveryProgress = null);
 }
 
 public interface IHardwareTuner
