@@ -12,9 +12,15 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
     private const int Win32MaxPath = 260;
 
+    private static readonly ScanDiscoveryEvent EvSearched          = new(DiscoveryEventType.Searched);
+    private static readonly ScanDiscoveryEvent EvFilteredSize      = new(DiscoveryEventType.FilteredOutSize);
+    private static readonly ScanDiscoveryEvent EvFilteredPattern   = new(DiscoveryEventType.FilteredOutPattern);
+    private static readonly ScanDiscoveryEvent EvFilteredFamily    = new(DiscoveryEventType.FilteredOutFamily);
+
     public async IAsyncEnumerable<FileCandidate> DiscoverAsync(
         ScanOptions options,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
+        IProgress<ScanDiscoveryEvent>? discoveryProgress = null)
     {
         var source = NormalizeLongPath(Path.GetFullPath(options.SourcePath));
         if (!Directory.Exists(source))
@@ -73,6 +79,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
                         cat2 == MediaCategory.Unknown ? MediaCategory.Unknown : cat2,
                         0L,
                         DateTimeOffset.MinValue);
+                    discoveryProgress?.Report(EvSearched);
                     yield return stub;
                     continue;
                 }
@@ -88,20 +95,35 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
                 searchedFiles++;
                 scannedBytes += fileLength;
+                discoveryProgress?.Report(EvSearched);
 
                 if (ShouldStopForRuntime() || ShouldStopBeforeNextMatch())
                     yield break;
+
                 if (!MatchesFileFilters(info, includePatterns, excludePatterns))
+                {
+                    discoveryProgress?.Report(EvFilteredPattern);
                     continue;
+                }
 
                 var ext = Path.GetExtension(file).ToLowerInvariant();
                 var category = GetCategory(file, ext, options, customImageRegex);
                 if (category == MediaCategory.Unknown || !IsEnabled(category, options))
+                {
+                    discoveryProgress?.Report(EvFilteredFamily);
                     continue;
+                }
+
                 if (options.MinCandidateBytes is long minBytes && fileLength < minBytes)
+                {
+                    discoveryProgress?.Report(EvFilteredSize);
                     continue;
+                }
                 if (options.MaxCandidateBytes is long maxBytes && fileLength > maxBytes)
+                {
+                    discoveryProgress?.Report(EvFilteredSize);
                     continue;
+                }
 
                 if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + fileLength > maxMatchedBytes)
                 {
