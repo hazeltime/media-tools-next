@@ -51,7 +51,7 @@ public sealed class ScanWorkflowState
     public CancellationToken ScanCancellationToken => scanCts?.Token ?? CancellationToken.None;
     public event Action? Changed;
 
-    // ── Elapsed / remaining ───────────────────────────────────────────────────
+    // ── Elapsed / remaining ───────────────────────────────────────────────
     private readonly Stopwatch _runStopwatch = new();
     public TimeSpan Elapsed => _runStopwatch.Elapsed;
     public TimeSpan? Remaining
@@ -72,7 +72,7 @@ public sealed class ScanWorkflowState
     public void AddMatchedBytes(long bytes) =>
         System.Threading.Interlocked.Add(ref _matchedBytes, bytes);
 
-    // ── Searched vs FilteredOut counters ─────────────────────────────────────
+    // ── Searched vs FilteredOut counters ────────────────────────────────────
     // TotalSearched  = every file the discoverer touched
     // FilteredOutSize    = dropped because of min/max file size
     // FilteredOutPattern = dropped because include/exclude pattern
@@ -270,8 +270,10 @@ public sealed class ScanWorkflowState
         if (MaxFileMb < 0) yield return "Maximum file size cannot be negative.";
         if (MaxFileMb > 0 && MinFileKb > MaxFileMb * 1024) yield return "Minimum file size cannot exceed maximum file size.";
         if (Mode != ScanActionMode.DryRun && string.IsNullOrWhiteSpace(TargetRoot)) yield return "Target folder is required for copy modes.";
+        if (Mode != ScanActionMode.DryRun && !string.IsNullOrWhiteSpace(TargetRoot) && !Directory.Exists(TargetRoot)) yield return "Target folder does not exist.";
         if (Mode != ScanActionMode.DryRun && !ConfirmedLiveMode) yield return "Confirm live copy mode before scanning.";
         if (Mode == ScanActionMode.CopySortedAndBackup && string.IsNullOrWhiteSpace(BackupRoot)) yield return "Backup folder is required for backup mode.";
+        if (Mode == ScanActionMode.CopySortedAndBackup && !string.IsNullOrWhiteSpace(BackupRoot) && !Directory.Exists(BackupRoot)) yield return "Backup folder does not exist.";
         if (Mode != ScanActionMode.DryRun && CopyStatuses.Count == 0) yield return "Select at least one outcome to copy.";
     }
 
