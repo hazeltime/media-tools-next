@@ -55,7 +55,13 @@
     private async Task Open(Guid id)
     {
         State.Results.Clear();
-        State.Results.AddRange(await Store.ListResultsAsync(id, CancellationToken.None));
+        var results = await Store.ListResultsAsync(id, CancellationToken.None);
+        State.Results.AddRange(results);
+        State.ResetStatusCounts();
+        foreach (var result in results)
+        {
+            State.IncrementStatusCount(result.Status);
+        }
         State.Summary = await Store.GetSummaryAsync(id, CancellationToken.None);
         Nav.NavigateTo("/results");
     }

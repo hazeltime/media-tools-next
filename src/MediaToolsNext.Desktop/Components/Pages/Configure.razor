@@ -69,7 +69,7 @@
                 </label>
             }
 
-            <%-- P4 fix: Hard limits are rarely changed — collapse by default --%>
+            @* P4 fix: Hard limits are rarely changed - collapse by default *@
             <details class="cfg-subsection">
                 <summary class="cfg-subsection-summary">
                     <h3 style="display:inline">Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
@@ -107,7 +107,7 @@
                 <div class="card-grid three">
                     @foreach (var profile in ScanProfiles.All)
                     {
-                        <button class="select-card @(State.ProfileName == profile.Name ? "active" : "")" @onclick="() => State.ApplyProfile(profile.Name)">
+                        <button class="select-card @(State.ProfileName == profile.Name ? "active" : "")" @onclick="() => ApplyProfile(profile.Name)">
                             <strong>@ProfileLabel(profile)</strong>
                             <span>@profile.Description</span>
                             <small>@ScanWorkflowState.DepthLabel(profile.ValidationDepth)</small>
@@ -127,12 +127,11 @@
                 @if (State.EnableImages)
                 {
                     <div class="extension-cloud">
-                        @foreach (var ext in SupportedMedia.ImageExtensions.OrderBy(x => x)) { <span>@ext</span> }
+                        @foreach (var ext in ImageExtensions) { <span>@ext</span> }
                     </div>
                 }
             </div>
 
-            <%-- P4 fix: custom image section only relevant when images are enabled --%>
             @if (State.EnableImages)
             {
                 <div class="cfg-subsection">
@@ -162,12 +161,11 @@
                         </label>
                     </div>
                 </div>
+                <div class="form-grid two">
+                    <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
+                    <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
+                </div>
             }
-
-            <div class="form-grid two">
-                <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
-                <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
-            </div>
         </div>
     </section>
 
@@ -292,15 +290,37 @@
 @code {
     private static readonly ValidationStatus[] Copyable =
         [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
+    private static readonly string[] ImageExtensions = GetImageExtensions();
 
-    private async Task PickSource() => State.SourcePath = await Picker.PickFolderAsync("Select source folder", State.SourcePath)  ?? State.SourcePath;
-    private async Task PickTarget() => State.TargetRoot = await Picker.PickFolderAsync("Select target folder", State.TargetRoot)  ?? State.TargetRoot;
-    private async Task PickBackup() => State.BackupRoot = await Picker.PickFolderAsync("Select backup folder", State.BackupRoot)  ?? State.BackupRoot;
+    private async Task PickSource()
+    {
+        State.SourcePath = await Picker.PickFolderAsync("Select source folder", State.SourcePath) ?? State.SourcePath;
+        State.NotifyChanged();
+    }
+
+    private async Task PickTarget()
+    {
+        State.TargetRoot = await Picker.PickFolderAsync("Select target folder", State.TargetRoot) ?? State.TargetRoot;
+        State.NotifyChanged();
+    }
+
+    private async Task PickBackup()
+    {
+        State.BackupRoot = await Picker.PickFolderAsync("Select backup folder", State.BackupRoot) ?? State.BackupRoot;
+        State.NotifyChanged();
+    }
 
     private void SetMode(ScanActionMode mode)
     {
         if (State.Mode != mode) State.ConfirmedLiveMode = false;
         State.Mode = mode;
+        State.NotifyChanged();
+    }
+
+    private void ApplyProfile(string name)
+    {
+        State.ApplyProfile(name);
+        State.NotifyChanged();
     }
 
     private void Toggle(ValidationStatus status, bool enabled)
@@ -320,4 +340,17 @@
         "all-media"       => "All media",
         _                 => profile.Name
     };
+
+    private static string[] GetImageExtensions()
+    {
+        var field = typeof(SupportedMedia).GetField("ExtensionToCategory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        if (field?.GetValue(null) is not System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, MediaCategory>> entries)
+            return [];
+
+        return entries
+            .Where(pair => pair.Value == MediaCategory.Image)
+            .Select(pair => pair.Key)
+            .OrderBy(x => x)
+            .ToArray();
+    }
 }

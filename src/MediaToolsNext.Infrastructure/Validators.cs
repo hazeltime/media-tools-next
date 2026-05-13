@@ -70,8 +70,10 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
         var ffprobeArgs = new[]
         {
             "-v", "error",
-            "-i", candidate.FullPath,
-            "-f", "null", "-"
+            "-show_streams",
+            "-show_format",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            candidate.FullPath
         };
 
         var timeout = TimeSpan.FromSeconds(

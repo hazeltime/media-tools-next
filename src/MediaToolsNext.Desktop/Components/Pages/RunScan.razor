@@ -27,7 +27,7 @@
         <span>@RunDetail</span>
     </section>
 
-    <%-- P1 fix: "Start scan" is the primary CTA; "Run preview" is secondary --%>
+    @* P1 fix: "Start scan" is the primary CTA; "Run preview" is secondary *@
     <section class="action-bar">
         <button class="secondary" disabled="@(State.IsBusy || Errors.Any())" @onclick="PreviewAsync"
                 title="@(Errors.Any() ? "Fix preflight errors before previewing" : "Discover matching files without writing anything")">
@@ -253,7 +253,7 @@
 
     private async Task PreviewAsync()
     {
-        if (Errors.Any()) { State.Message = "Preview blocked: " + Errors[0]; return; }
+        if (Errors.Any()) { State.Message = "Preview blocked: " + Errors[0]; State.NotifyChanged(); return; }
         if (!State.TryStartPreview()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
         var limit = new ScanLimitState();
         try

@@ -188,6 +188,34 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task DiscoveryDelaysMaxMatchedBytesUntilMinimumIsReached()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
+            File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "12345");
+            File.WriteAllText(Path.Combine(root, "C_stop.jpg"), "12345");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MinMatchedBytes = 10,
+                MaxMatchedBytes = 6
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Equal(2, files.Count);
+            Assert.Equal(["A_keep.jpg", "B_keep.jpg"], files.Select(x => x.RelativePath));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DiscoveryAppliesWildcardFiltersBeforeMatchedFileLimit()
     {
         var root = NewTempDir();
@@ -286,6 +314,38 @@ public class DiscoveryAndActionTests
             Assert.Equal(backupCopy, action.BackupTargetPath);
             Assert.True(File.Exists(targetCopy));
             Assert.True(File.Exists(backupCopy));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task CopySortedAndBackupUsesSharedSuffixWhenTargetAlreadyExists()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            var backup = Path.Combine(root, "backup");
+            File.WriteAllText(source, "hello");
+            Directory.CreateDirectory(Path.Combine(target, "valid", "docs"));
+            File.WriteAllText(Path.Combine(target, "valid", "docs", "a.txt"), "existing");
+            var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySortedAndBackup,
+                BackupRoot = backup
+            };
+
+            var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
+
+            var targetCopy = Path.Combine(target, "valid", "docs", "a_1.txt");
+            var backupCopy = Path.Combine(backup, "valid", "docs", "a_1.txt");
+            Assert.Equal(targetCopy, action.PrimaryTargetPath);
+            Assert.Equal(backupCopy, action.BackupTargetPath);
+            Assert.Equal("hello", File.ReadAllText(targetCopy));
+            Assert.Equal("hello", File.ReadAllText(backupCopy));
         }
         finally { Directory.Delete(root, true); }
     }

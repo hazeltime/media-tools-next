@@ -63,6 +63,31 @@ public class ScanPreviewTests
     }
 
     [Fact]
+    public async Task PreviewDelaysFileLimitUntilMinimumRuntimeElapsed()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
+            File.WriteAllText(Path.Combine(root, "b.txt"), "hello");
+            var limitState = new ScanLimitState();
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            {
+                MaxMatchedFiles = 1,
+                MinRuntimeBeforeLimitsSeconds = 1,
+                LimitState = limitState
+            };
+
+            var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
+
+            Assert.Equal(2, preview.TotalFiles);
+            Assert.Equal("Source exhausted.", limitState.StopReason);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task PreviewReportsFirstReachedMatchedMbLimit()
     {
         var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
@@ -82,6 +107,32 @@ public class ScanPreviewTests
 
             Assert.Equal(0, preview.TotalFiles);
             Assert.Equal("Stopped before exceeding the total matched size limit of 1 B.", limitState.StopReason);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task PreviewAppliesMaxMatchedBytesOnceMinimumMatchedBytesIsReached()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "a.txt"), "12345");
+            File.WriteAllText(Path.Combine(root, "b.txt"), "12345");
+            var limitState = new ScanLimitState();
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            {
+                MinMatchedBytes = 5,
+                MaxMatchedBytes = 6,
+                LimitState = limitState
+            };
+
+            var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
+
+            Assert.Equal(1, preview.TotalFiles);
+            Assert.Equal(5, preview.TotalBytes);
+            Assert.Equal("Stopped before exceeding the total matched size limit of 6 B.", limitState.StopReason);
         }
         finally { Directory.Delete(root, true); }
     }

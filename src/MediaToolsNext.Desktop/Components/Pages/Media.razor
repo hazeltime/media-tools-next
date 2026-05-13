@@ -31,41 +31,46 @@
         @if (State.EnableImages)
         {
             <div class="extension-cloud">
-                @foreach (var ext in SupportedMedia.ImageExtensions.OrderBy(x => x)) { <span>@ext</span> }
+                @foreach (var ext in ImageExtensions) { <span>@ext</span> }
             </div>
         }
     </section>
 
-    <section class="panel">
-        <h2>Custom image types</h2>
-        <div class="form-grid two">
-            <label>
-                Extra image extensions
-                <small>Accepts jpg, .jpg, or *.jpg separated by spaces.</small>
-                <textarea rows="3" @bind="State.CustomImageExtensionsText" />
-            </label>
-            <label>
-                Custom image filename regex
-                <small class="@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "" : "regex-invalid")">
-                    @(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "⚠ Regex is invalid.")
-                </small>
-                <input @bind="State.CustomImageRegex" />
-            </label>
-        </div>
-    </section>
+    @if (State.EnableImages)
+    {
+        <section class="panel">
+            <h2>Custom image types</h2>
+            <div class="form-grid two">
+                <label>
+                    Extra image extensions
+                    <small>Accepts jpg, .jpg, or *.jpg separated by spaces.</small>
+                    <textarea rows="3" @bind="State.CustomImageExtensionsText" />
+                </label>
+                <label>
+                    Custom image filename regex
+                    <small class="@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "" : "regex-invalid")">
+                        @(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "⚠ Regex is invalid.")
+                    </small>
+                    <input @bind="State.CustomImageRegex" />
+                </label>
+            </div>
+        </section>
 
-    <section class="panel">
-        <h2>Include filters</h2>
-        <div class="form-grid two">
-            <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
-            <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
-            <label>Include filename wildcards <small>Example: IMG_* *.jpg</small><textarea rows="3" @bind="State.IncludePatternsText" /></label>
-            <label>Exclude filename wildcards <small>Example: thumb_* *_small.*</small><textarea rows="3" @bind="State.ExcludePatternsText" /></label>
-        </div>
-    </section>
+        <section class="panel">
+            <h2>Include filters</h2>
+            <div class="form-grid two">
+                <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
+                <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
+                <label>Include filename wildcards <small>Example: IMG_* *.jpg</small><textarea rows="3" @bind="State.IncludePatternsText" /></label>
+                <label>Exclude filename wildcards <small>Example: thumb_* *_small.*</small><textarea rows="3" @bind="State.ExcludePatternsText" /></label>
+            </div>
+        </section>
+    }
 </div>
 
 @code {
+    private static readonly string[] ImageExtensions = GetImageExtensions();
+
     private static string Label(ScanProfile profile) => profile.Name switch
     {
         "quick-images"   => "Quick image check",
@@ -74,4 +79,17 @@
         "all-media"      => "All media",
         _                => profile.Name
     };
+
+    private static string[] GetImageExtensions()
+    {
+        var field = typeof(SupportedMedia).GetField("ExtensionToCategory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        if (field?.GetValue(null) is not System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, MediaCategory>> entries)
+            return [];
+
+        return entries
+            .Where(pair => pair.Value == MediaCategory.Image)
+            .Select(pair => pair.Key)
+            .OrderBy(x => x)
+            .ToArray();
+    }
 }

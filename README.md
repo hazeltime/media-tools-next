@@ -45,7 +45,12 @@ dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target>
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --live
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --backup <backup> --live
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --concurrency <1-32>
 ```
 
 Without `--live`, no files are copied.
+If `--concurrency` is omitted, the CLI uses the hardware-tuned recommendation. Values are clamped to the 1-32 range.
 
+## Desktop
+
+The desktop app starts at `MainPage` and walks through the scan workflow in the app itself. By default it stores the SQLite database under `%LocalAppData%\media-tools-next\media-tools-next.db`.

@@ -21,8 +21,7 @@ public sealed class ScanPreviewService(IFileDiscoverer discoverer) : IScanPrevie
             counts[candidate.Category]++;
 
             var dir = Path.GetDirectoryName(candidate.RelativePath);
-            if (!string.IsNullOrEmpty(dir))
-                dirs.Add(dir);
+            dirs.Add(string.IsNullOrEmpty(dir) ? "." : dir);
 
             if (total % 250 == 0)
                 progress?.Report(new ScanPreview(total, dirs.Count, bytes, counts));

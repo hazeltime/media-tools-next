@@ -11,16 +11,16 @@
         <h2>Source and files</h2>
         <details><summary>What happens to source files?</summary><p>Source files are read for validation. The app does not modify, move, rename, or delete originals.</p></details>
         <details><summary>What is copied?</summary><p>Copy modes copy only selected outcomes to target folders: valid, corrupt, unknown, and error.</p></details>
-        <details><summary>What do the check levels mean?</summary><p>Quick checks file headers only. Medium adds ImageMagick metadata validation. In-depth asks ImageMagick to fully read the image pixel data.</p></details>
+        <details><summary>What do the check levels mean?</summary><p>Quick checks file existence, non-zero size, and image header bytes. Medium adds ImageMagick identify -ping when available. In-depth asks ImageMagick to read the image without -ping for stronger corruption detection.</p></details>
         <details><summary>What do limits count?</summary><p>Limits count matched files only. In image-only mode, max files means max image files. Set any limit to 0 to disable it.</p></details>
     </section>
 
     <section class="panel help-panel">
         <h2>External tools</h2>
-        <details><summary>Which external tools are used?</summary><p>ffmpeg and ffprobe for video and audio validation; ImageMagick (magick) for deep image checks; qpdf for PDF validation. All are optional — the app falls back to header checks if a tool is missing.</p></details>
+        <details><summary>Which external tools are used?</summary><p>ffmpeg and ffprobe for video and audio validation; ImageMagick (magick) for deep image checks. All are optional — the app falls back to header checks if a tool is missing.</p></details>
         <details><summary>How do I install the tools?</summary>
             <p>Run in PowerShell (requires Chocolatey):</p>
-            <pre><code>choco install ffmpeg imagemagick qpdf -y</code></pre>
+            <pre><code>choco install ffmpeg imagemagick -y</code></pre>
             <p>ImageMagick is also probed under Program Files when <code>magick</code> is not on PATH.</p>
         </details>
         <details><summary>How do I verify tools are found?</summary><p>Go to the Validation step — the tool row at the top shows each tool as green (found) or red (missing). Hover a badge to see the resolved path.</p></details>

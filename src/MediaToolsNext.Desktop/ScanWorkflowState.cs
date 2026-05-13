@@ -222,6 +222,7 @@ public sealed class ScanWorkflowState
         EnableDocuments = profile.EnableDocuments;
         ProbeSeconds = profile.MediaProbeSeconds;
         ValidationDepth = profile.ValidationDepth;
+        NotifyChanged();
     }
 
     public ScanOptions BuildOptions(ScanLimitState? limitState = null)

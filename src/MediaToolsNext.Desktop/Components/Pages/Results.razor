@@ -3,6 +3,7 @@
 @inject ScanWorkflowState State
 @inject FolderPickerService Picker
 @inject IReportExporter CsvExporter
+@inject NavigationManager Nav
 @implements IDisposable
 
 <div class="page-stack">
@@ -12,7 +13,7 @@
         <p>Structured scan results. Use filters and tabs to focus on what matters.</p>
     </header>
 
-    <%-- P2 fix: show State.Message on this page (was only on RunScan) --%>
+    @* P2 fix: show State.Message on this page (was only on RunScan) *@
     @if (!string.IsNullOrWhiteSpace(State.Message)) { <div class="notice">@State.Message</div> }
 
     <!-- Scan metadata -->
@@ -101,7 +102,7 @@
                     <option value="time">Scan order</option>
                 </select>
             </label>
-            <%-- P2 fix: describe what will be exported before the user clicks --%>
+            @* P2 fix: describe what will be exported before the user clicks *@
             <button class="secondary" disabled="@(!State.Results.Any())" @onclick="ExportAsync"
                     title="Export @State.Results.Count.ToString("N0") results as @State.ReportFormat.ToUpperInvariant()">
                 Export @State.ReportFormat.ToUpperInvariant()
@@ -233,23 +234,27 @@
 
     protected override void OnInitialized()
     {
-        ActiveTab = string.IsNullOrWhiteSpace(Tab) ? "all" : Tab.ToLowerInvariant();
+        ActiveTab = ResolveTab(Tab);
         State.Changed += OnStateChanged;
         RebuildCache();
     }
 
     protected override void OnParametersSet()
     {
-        if (!string.IsNullOrWhiteSpace(Tab))
-            ActiveTab = Tab.ToLowerInvariant();
+        ActiveTab = ResolveTab(Tab);
         RebuildCache();
     }
 
     public void Dispose() => State.Changed -= OnStateChanged;
 
-    private void SetTab(string tab) { ActiveTab = tab; RebuildCache(); }
+    private void SetTab(string tab)
+    {
+        Nav.NavigateTo($"/results/{tab}");
+    }
 
     private void OnStateChanged() => InvokeAsync(() => { RebuildCache(); StateHasChanged(); });
+
+    private static string ResolveTab(string? tab) => string.IsNullOrWhiteSpace(tab) ? "all" : tab.ToLowerInvariant();
 
     private void RebuildCache()
     {

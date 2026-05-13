@@ -15,5 +15,22 @@ public class ImageHeaderAnalyzerTests
         }
         finally { File.Delete(path); }
     }
-}
 
+    [Fact]
+    public void DetectsHeifMajorBrand()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(path, [
+                0x00, 0x00, 0x00, 0x18,
+                0x66, 0x74, 0x79, 0x70,
+                0x68, 0x65, 0x69, 0x66,
+                0x00, 0x00, 0x00, 0x00
+            ]);
+
+            Assert.Equal("heic", ImageHeaderAnalyzer.Detect(path));
+        }
+        finally { File.Delete(path); }
+    }
+}
