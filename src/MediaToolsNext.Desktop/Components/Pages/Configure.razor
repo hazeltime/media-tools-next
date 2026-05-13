@@ -1,4 +1,3 @@
-@page "/"
 @page "/configure"
 @inject ScanWorkflowState State
 @inject FolderPickerService Picker
@@ -17,7 +16,6 @@
         </div>
 
         <div class="cfg-body">
-            <!-- Mode selector -->
             <div class="card-grid three">
                 <button class="select-card @(State.Mode == ScanActionMode.DryRun            ? "active" : "")" @onclick="() => SetMode(ScanActionMode.DryRun)">
                     <strong>Log only</strong><span>Validate and record results. No target writes.</span>
@@ -30,7 +28,6 @@
                 </button>
             </div>
 
-            <!-- Folder paths -->
             <div class="cfg-folders">
                 <label>
                     Source folder
@@ -72,7 +69,6 @@
                 </label>
             }
 
-            <!-- Hard limits -->
             <div class="cfg-subsection">
                 <h3>Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
                 <div class="form-grid three">
@@ -101,7 +97,6 @@
         </div>
 
         <div class="cfg-body">
-            <!-- Preset cards -->
             <div class="cfg-subsection">
                 <h3>Image scan preset</h3>
                 <div class="card-grid three">
@@ -116,7 +111,6 @@
                 </div>
             </div>
 
-            <!-- File families -->
             <div class="cfg-subsection">
                 <h3>File families</h3>
                 <div class="form-grid four">
@@ -133,7 +127,6 @@
                 }
             </div>
 
-            <!-- Custom types + filters in a 2-col grid -->
             <div class="cfg-subsection">
                 <h3>Custom image types &amp; include filters</h3>
                 <div class="form-grid two">
@@ -162,7 +155,6 @@
                 </div>
             </div>
 
-            <!-- Size filters in same row -->
             <div class="form-grid two">
                 <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
                 <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
@@ -183,7 +175,6 @@
         </div>
 
         <div class="cfg-body">
-            <!-- Depth cards -->
             <div class="card-grid three">
                 @foreach (var depth in Enum.GetValues<ValidationDepth>())
                 {
@@ -194,7 +185,6 @@
                 }
             </div>
 
-            <!-- Tools + performance -->
             <div class="cfg-subsection">
                 <h3>Tools &amp; performance</h3>
                 @if (ToolProbe.GetStatuses().All(t => !t.IsAvailable))
@@ -239,7 +229,6 @@
         </div>
 
         <div class="cfg-body">
-            <!-- Copy outcomes -->
             <div class="cfg-subsection">
                 <h3>Copy outcomes</h3>
                 @if (State.Mode == ScanActionMode.DryRun)
@@ -264,7 +253,6 @@
                 }
             </div>
 
-            <!-- Report defaults -->
             <div class="cfg-subsection">
                 <h3>Report defaults</h3>
                 <div class="form-grid three">
@@ -296,9 +284,9 @@
     private static readonly ValidationStatus[] Copyable =
         [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
 
-    private async Task PickSource() => State.SourcePath = await Picker.PickFolderAsync("Select source folder",  State.SourcePath)  ?? State.SourcePath;
-    private async Task PickTarget() => State.TargetRoot = await Picker.PickFolderAsync("Select target folder",  State.TargetRoot)  ?? State.TargetRoot;
-    private async Task PickBackup() => State.BackupRoot = await Picker.PickFolderAsync("Select backup folder",  State.BackupRoot)  ?? State.BackupRoot;
+    private async Task PickSource() => State.SourcePath = await Picker.PickFolderAsync("Select source folder", State.SourcePath)  ?? State.SourcePath;
+    private async Task PickTarget() => State.TargetRoot = await Picker.PickFolderAsync("Select target folder", State.TargetRoot)  ?? State.TargetRoot;
+    private async Task PickBackup() => State.BackupRoot = await Picker.PickFolderAsync("Select backup folder", State.BackupRoot)  ?? State.BackupRoot;
 
     private void SetMode(ScanActionMode mode)
     {
