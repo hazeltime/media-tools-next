@@ -10,6 +10,43 @@ $OutputDir = Join-Path $RepoRoot "publish-root"
 $LauncherDir = Join-Path $OutputDir ".launcher"
 $RootExe = Join-Path $RepoRoot "MediaToolsNext.exe"
 
+function Stop-PublishedAppProcesses {
+    param(
+        [string]$AppRoot,
+        [string]$LauncherPath
+    )
+
+    $normalizedAppRoot = [System.IO.Path]::GetFullPath($AppRoot).TrimEnd('\') + '\'
+    $normalizedLauncher = [System.IO.Path]::GetFullPath($LauncherPath)
+
+    $processes = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        try {
+            if ([string]::IsNullOrWhiteSpace($_.Path)) { return $false }
+            $path = [System.IO.Path]::GetFullPath($_.Path)
+            return $path.StartsWith($normalizedAppRoot, [System.StringComparison]::OrdinalIgnoreCase) `
+                -or [System.StringComparer]::OrdinalIgnoreCase.Equals($path, $normalizedLauncher)
+        }
+        catch {
+            return $false
+        }
+    }
+
+    foreach ($process in $processes) {
+        try {
+            if ($process.MainWindowHandle -ne 0) {
+                [void]$process.CloseMainWindow()
+                if ($process.WaitForExit(3000)) { continue }
+            }
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) { continue }
+            Stop-Process -Id $process.Id -Force -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Could not stop running published process $($process.ProcessName) ($($process.Id)): $($_.Exception.Message)"
+        }
+    }
+}
+
+Stop-PublishedAppProcesses -AppRoot $OutputDir -LauncherPath $RootExe
 Remove-Item -LiteralPath $OutputDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $RootExe -Force -ErrorAction SilentlyContinue
 
@@ -19,10 +56,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $BuildDir "MediaToolsNext.Desktop.ex
     throw "Build executable was not found in $BuildDir"
 }
 
-New-Item -ItemType Directory -Path $OutputDir | Out-Null
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 Copy-Item -Path (Join-Path $BuildDir "*") -Destination $OutputDir -Recurse -Force
 
-New-Item -ItemType Directory -Path $LauncherDir | Out-Null
+New-Item -ItemType Directory -Path $LauncherDir -Force | Out-Null
 Push-Location $LauncherDir
 try {
     dotnet new console --force | Out-Null
