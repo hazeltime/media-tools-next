@@ -7,7 +7,7 @@ public static class ImageHeaderAnalyzer
     public static string Detect(string path)
     {
         byte[] buffer = new byte[64];
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64, FileOptions.SequentialScan);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
         var read = stream.Read(buffer, 0, buffer.Length);
         if (read < 2) return "unknown";
 
@@ -39,15 +39,14 @@ public static class ImageHeaderAnalyzer
         if (n < 12) return "unknown";
         if (b[4] != 0x66 || b[5] != 0x74 || b[6] != 0x79 || b[7] != 0x70) return "unknown";
         var majorBrand = Encoding.ASCII.GetString(b, 8, 4);
-        if (majorBrand is "heic" or "heix" or "hevc" or "hevx" or "mif1" or "msf1") return "heic";
+        if (majorBrand is "heic" or "heix" or "heif" or "hevc" or "hevx" or "mif1" or "msf1") return "heic";
         if (majorBrand is "avif" or "avis") return "avif";
         for (var offset = 16; offset + 4 <= n; offset += 4)
         {
             var brand = Encoding.ASCII.GetString(b, offset, 4);
-            if (brand is "heic" or "heix" or "hevc" or "hevx" or "mif1" or "msf1") return "heic";
+            if (brand is "heic" or "heix" or "heif" or "hevc" or "hevx" or "mif1" or "msf1") return "heic";
             if (brand is "avif" or "avis") return "avif";
         }
         return "unknown";
     }
 }
-

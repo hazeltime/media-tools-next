@@ -38,6 +38,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
         var matchedDirs   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var maxSearchedDirs  = options.MaxSearchedDirectories ?? options.MaxDirectories;
         var maxMatchedFiles  = options.MaxMatchedFiles ?? options.MaxFiles;
+        var minRuntimeBeforeLimits = TimeSpan.FromSeconds(Math.Max(0, options.MinRuntimeBeforeLimitsSeconds));
         var customImageRegex = CreateRegex(options.CustomImageRegex);
         var includePatterns  = CompileWildcards(options.IncludeFileNamePatterns);
         var excludePatterns  = CompileWildcards(options.ExcludeFileNamePatterns);
@@ -125,14 +126,21 @@ public sealed class FileDiscoverer : IFileDiscoverer
                     continue;
                 }
 
-                if (options.MaxMatchedBytes is long maxMatchedBytes && matchedBytes + fileLength > maxMatchedBytes)
+                var minMatchedBytesReached = options.MinMatchedBytes is not long minMatchedBytes || matchedBytes >= minMatchedBytes;
+                var runtimeBeforeLimitsElapsed = minRuntimeBeforeLimits <= TimeSpan.Zero
+                    || DateTimeOffset.UtcNow - started >= minRuntimeBeforeLimits;
+                if (runtimeBeforeLimitsElapsed
+                    && minMatchedBytesReached
+                    && options.MaxMatchedBytes is long maxMatchedBytes
+                    && matchedBytes + fileLength > maxMatchedBytes)
                 {
                     Stop($"Stopped before exceeding the total matched size limit of {FormatBytes(maxMatchedBytes)}.");
                     yield break;
                 }
 
                 var matchDir = Path.GetDirectoryName(info.FullName);
-                if (options.MaxMatchedDirectories is int maxMatchedDirs
+                if (runtimeBeforeLimitsElapsed
+                    && options.MaxMatchedDirectories is int maxMatchedDirs
                     && !string.IsNullOrWhiteSpace(matchDir)
                     && !matchedDirs.Contains(matchDir)
                     && matchedDirs.Count >= maxMatchedDirs)
@@ -177,19 +185,21 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 return true;
             }
             if (options.MinScannedBytes is long minScannedBytes && scannedBytes < minScannedBytes)
-                return false;
+            {
+                // Not enough scanned yet, continue scanning
+            }
             if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes)
             {
                 Stop($"Stopped after inspecting {FormatBytes(maxScannedBytes)} of searched data.");
                 return true;
             }
+            if (options.MinRuntimeBeforeLimitsSeconds > 0 && DateTimeOffset.UtcNow - started < minRuntimeBeforeLimits)
+                return false;
             if (maxMatchedFiles is int maxFiles && matchedFiles >= maxFiles)
             {
                 Stop($"Stopped after matching {maxFiles:N0} files.");
                 return true;
             }
-            if (options.MinMatchedBytes is long minMatchedBytes && matchedBytes < minMatchedBytes)
-                return false;
             return false;
         }
 
@@ -205,7 +215,7 @@ public sealed class FileDiscoverer : IFileDiscoverer
         string? directoryError = null;
         try
         {
-            entries = Directory.EnumerateFiles(path).OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+            entries = Directory.EnumerateFiles(path);
         }
         catch (UnauthorizedAccessException ex) { directoryError = "access_denied: " + ex.Message; }
         catch (PathTooLongException)           { yield break; }
@@ -263,7 +273,8 @@ public sealed class FileDiscoverer : IFileDiscoverer
     private static Regex? CreateRegex(string? pattern)
     {
         if (string.IsNullOrWhiteSpace(pattern)) return null;
-        return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        try { return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled); }
+        catch (ArgumentException) { return null; }
     }
 
     private static bool MatchesFileFilters(FileInfo info, IReadOnlyList<Regex> includePatterns, IReadOnlyList<Regex> excludePatterns)

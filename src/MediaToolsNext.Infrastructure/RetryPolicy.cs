@@ -9,13 +9,13 @@ public static class RetryPolicy
     /// </summary>
     public static bool ShouldRetry(ValidationOutcome outcome) =>
         outcome.Status == ValidationStatus.Error ||
-        (outcome.Detail?.Contains("timeout", StringComparison.OrdinalIgnoreCase) ?? false) ||
-        (outcome.Detail?.Contains("locked", StringComparison.OrdinalIgnoreCase) ?? false);
+        outcome.Detail is { } detail && (detail.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                                         detail.Contains("locked", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Returns true when a file-action exception is transient and worth retrying.
     /// Used by ScannerPipeline.ApplyWithRetryAsync so retry logic is centralised.
     /// </summary>
     public static bool ShouldRetryIOException(Exception ex) =>
-        ex is IOException or UnauthorizedAccessException;
+        ex is IOException;
 }

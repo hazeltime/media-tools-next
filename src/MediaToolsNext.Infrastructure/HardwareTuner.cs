@@ -4,9 +4,11 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class HardwareTuner : IHardwareTuner
 {
+    private const long LowMemoryThresholdBytes = 8L * 1024 * 1024 * 1024;
+
     public HardwareProfile Recommend(string sourcePath, string targetPath)
     {
-        var cpu        = Environment.ProcessorCount;
+        var cpu        = Math.Max(1, Environment.ProcessorCount);
         var memory     = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         var sourceDrive = GetDriveType(sourcePath);
         var targetDrive = GetDriveType(targetPath);
@@ -16,18 +18,10 @@ public sealed class HardwareTuner : IHardwareTuner
             Path.GetPathRoot(Path.GetFullPath(targetPath)),
             StringComparison.OrdinalIgnoreCase);
 
-        // Reading and writing on the same physical drive creates contention:
-        // halve the worker count so we don't thrash the disk head.
         var ioPenalty = sameRoot ? 2 : 1;
 
-        // On machines with < 8 GB available RAM, each validator spawns external
-        // processes that are relatively memory-hungry, so cap the worker count.
-        // memoryCap = 2 when RAM is scarce, 0 otherwise — subtracted after
-        // the IO-penalty division so the cap is applied last.
-        var memoryCap = memory > 0 && memory < 8L * 1024 * 1024 * 1024 ? 2 : 0;
+        var memoryCap = memory > 0 && memory < LowMemoryThresholdBytes ? 2 : 0;
 
-        // Clamp between 1 and 16. The minimum of 1 ensures we always make
-        // progress even on single-core / low-memory environments.
         var concurrency = Math.Clamp((cpu / ioPenalty) - memoryCap, 1, 16);
 
         // Prefer large I/O buffers when both drives are fixed (SSD/HDD).

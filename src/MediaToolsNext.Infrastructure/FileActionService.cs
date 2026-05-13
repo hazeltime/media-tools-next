@@ -17,16 +17,23 @@ public sealed class FileActionService : IFileActionService
             : outcome.Status.ToString().ToLowerInvariant();
 
         var primaryTarget = GetSafePath(CombineOutputPath(options.TargetRoot, statusFolder, outcome.Candidate.RelativePath));
-        Directory.CreateDirectory(Path.GetDirectoryName(primaryTarget)!);
-        await CopyAsync(outcome.Candidate.FullPath, primaryTarget, cancellationToken);
-
         string? backupTarget = null;
+
         // Only write backup when the mode explicitly requests it AND a backup root is configured.
         // CopySorted must never write a backup even if BackupRoot happens to be set.
         if (options.ActionMode == ScanActionMode.CopySortedAndBackup
             && !string.IsNullOrWhiteSpace(options.BackupRoot))
         {
-            backupTarget = GetSafePath(CombineOutputPath(options.BackupRoot, statusFolder, outcome.Candidate.RelativePath));
+            (primaryTarget, backupTarget) = GetSharedSafePaths(
+                CombineOutputPath(options.TargetRoot, statusFolder, outcome.Candidate.RelativePath),
+                CombineOutputPath(options.BackupRoot, statusFolder, outcome.Candidate.RelativePath));
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(primaryTarget)!);
+        await CopyAsync(outcome.Candidate.FullPath, primaryTarget, cancellationToken);
+
+        if (backupTarget is not null)
+        {
             Directory.CreateDirectory(Path.GetDirectoryName(backupTarget)!);
             await CopyAsync(primaryTarget, backupTarget, cancellationToken);
         }
@@ -36,8 +43,9 @@ public sealed class FileActionService : IFileActionService
 
     private static async Task CopyAsync(string source, string target, CancellationToken cancellationToken)
     {
-        await using var input  = File.Open(source, FileMode.Open, FileAccess.Read, FileShare.Read);
-        await using var output = File.Create(target);
+        const int CopyBufferSize = 1024 * 1024;
+        await using var input  = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize);
+        await using var output = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None, CopyBufferSize);
         await input.CopyToAsync(output, cancellationToken);
     }
 
@@ -71,5 +79,26 @@ public sealed class FileActionService : IFileActionService
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
         return Path.Combine([root, statusFolder, .. parts]);
+    }
+
+    private static (string PrimaryTarget, string BackupTarget) GetSharedSafePaths(string primaryTarget, string backupTarget)
+    {
+        if (!File.Exists(primaryTarget) && !File.Exists(backupTarget))
+            return (primaryTarget, backupTarget);
+
+        var primaryDir = Path.GetDirectoryName(primaryTarget)!;
+        var primaryName = Path.GetFileNameWithoutExtension(primaryTarget);
+        var primaryExt = Path.GetExtension(primaryTarget);
+        var backupDir = Path.GetDirectoryName(backupTarget)!;
+        var backupName = Path.GetFileNameWithoutExtension(backupTarget);
+        var backupExt = Path.GetExtension(backupTarget);
+
+        for (var i = 1; ; i++)
+        {
+            var primarySuffixed = Path.Combine(primaryDir, $"{primaryName}_{i}{primaryExt}");
+            var backupSuffixed = Path.Combine(backupDir, $"{backupName}_{i}{backupExt}");
+            if (!File.Exists(primarySuffixed) && !File.Exists(backupSuffixed))
+                return (primarySuffixed, backupSuffixed);
+        }
     }
 }

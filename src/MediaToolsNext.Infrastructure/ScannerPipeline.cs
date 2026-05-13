@@ -53,7 +53,7 @@ public sealed class ScannerPipeline(
 
         const int BatchSize = 32;
 
-        var workers = Enumerable.Range(0, Math.Max(1, options.MaxConcurrency)).Select(_ => Task.Run(async () =>
+        var workers = Enumerable.Range(0, Math.Max(1, (Environment.ProcessorCount + 1) / 2)).Select(_ => Task.Run(async () =>
         {
             var buffer = new List<ScanResultRecord>(BatchSize);
 
@@ -107,7 +107,6 @@ public sealed class ScannerPipeline(
                     "cache_reused_previous_validation",
                     "cached", null, null,
                     DateTimeOffset.UtcNow);
-                await store.BatchSaveResultsAsync([cached], cancellationToken);
                 return cached;
             }
         }

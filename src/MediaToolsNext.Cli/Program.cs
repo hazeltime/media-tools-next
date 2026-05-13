@@ -37,8 +37,15 @@ var db         = ValueAfter("--db")
         "media-tools-next",
         "media-tools-next.db");
 
-var tuning      = new HardwareTuner().Recommend(source, target);
-var concurrency = int.TryParse(ValueAfter("--concurrency"), out var parsed) ? parsed : tuning.RecommendedConcurrency;
+var tuning = new HardwareTuner();
+        var hardwareProfile = new HardwareProfile(Environment.ProcessorCount, 0, "", "", Math.Max(1, (Environment.ProcessorCount + 1) / 2), 1048576, 120, "");
+        try { hardwareProfile = tuning.Recommend(source, target); }
+        catch { }
+        var recommendedConcurrency = hardwareProfile.RecommendedConcurrency;
+        var recommendedProbeSeconds = hardwareProfile.RecommendedProbeSeconds;
+var concurrency = int.TryParse(ValueAfter("--concurrency"), out var parsed)
+    ? Math.Clamp(parsed, 1, 32)
+    : recommendedConcurrency;
 var mode        = args.Contains("--live")
     ? (backup is null ? ScanActionMode.CopySorted : ScanActionMode.CopySortedAndBackup)
     : profile.DefaultActionMode;
@@ -51,7 +58,7 @@ Console.WriteLine("Tool status:");
 foreach (var tool in tools.GetStatuses())
     Console.WriteLine($"  {tool.Name,-10} {(tool.IsAvailable ? tool.Path : "missing")}");
 
-Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={tuning.RecommendedProbeSeconds}, buffer={tuning.RecommendedCopyBufferBytes:N0} bytes, {tuning.Rationale}");
+Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={recommendedProbeSeconds}, buffer={hardwareProfile.RecommendedCopyBufferBytes:N0} bytes, {hardwareProfile.Rationale}");
 
 // -----------------------------------------------------------------------
 // Build options

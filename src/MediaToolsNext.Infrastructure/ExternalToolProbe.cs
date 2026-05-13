@@ -43,15 +43,53 @@ public sealed class ExternalToolProbe : IExternalToolProbe
 
         if (OperatingSystem.IsWindows() && commandName == "magick")
         {
-            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            if (Directory.Exists(programFiles))
+            foreach (var candidate in GetMagickFallbackCandidates())
             {
-                var found = Directory.EnumerateFiles(programFiles, "magick.exe", SearchOption.AllDirectories)
-                    .FirstOrDefault();
-                if (found is not null) return found;
+                if (File.Exists(candidate)) return candidate;
+
+                try
+                {
+                    var parent = Path.GetDirectoryName(candidate);
+                    if (parent is not null && Directory.Exists(parent))
+                    {
+                        var found = Directory.EnumerateFiles(parent, Path.GetFileName(candidate), SearchOption.TopDirectoryOnly)
+                            .FirstOrDefault();
+                        if (found is not null) return found;
+                    }
+                }
+                catch { }
             }
         }
 
         return null;
+    }
+
+    private static IEnumerable<string> GetMagickFallbackCandidates()
+    {
+        foreach (var root in GetProgramFilesRoots())
+        {
+            if (!Directory.Exists(root)) continue;
+
+            yield return Path.Combine(root, "magick.exe");
+
+            foreach (var installDir in Directory.EnumerateDirectories(root, "ImageMagick*", SearchOption.TopDirectoryOnly))
+            {
+                yield return Path.Combine(installDir, "magick.exe");
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetProgramFilesRoots()
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrWhiteSpace(programFiles))
+            yield return programFiles;
+
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        if (!string.IsNullOrWhiteSpace(programFilesX86) &&
+            !string.Equals(programFilesX86, programFiles, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return programFilesX86;
+        }
     }
 }

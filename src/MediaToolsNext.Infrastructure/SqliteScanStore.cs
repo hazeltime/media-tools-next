@@ -5,20 +5,33 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class SqliteScanStore(string databasePath) : IScanStore
 {
-    // BUG FIX: use second-precision timestamp format for cache lookups.
-    // The full round-trip format ("O") includes sub-second precision that varies
-    // by filesystem (NTFS vs FAT32 vs exFAT), causing cache misses for files that
-    // were copied to a lower-precision filesystem and then re-scanned.
-    // Using "yyyy-MM-ddTHH:mm:ssZ" normalises all timestamps to whole seconds.
     private const string TimestampFormat = "yyyy-MM-ddTHH:mm:ssZ";
 
-    private string ConnectionString => new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
+    private readonly string _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
+    private string ConnectionString => _connectionString;
+
+    private static async Task ConfigureConnectionAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        // Keep wait time bounded on every connection so short write contention
+        // does not surface as a transient lock failure.
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA busy_timeout=5000;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        using (var pragmaCommand = connection.CreateCommand())
+        {
+            // WAL is persistent for the database file, so set it once during
+            // initialization instead of on every connection open.
+            pragmaCommand.CommandText = "PRAGMA journal_mode=WAL;";
+            await pragmaCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -56,6 +69,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         var id = Guid.NewGuid();
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
         command.CommandText = "INSERT INTO sessions VALUES ($id,$source,$target,$backup,$mode,$started)";
         command.Parameters.AddWithValue("$id", id.ToString());
@@ -72,6 +86,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
     {
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         await InsertResultAsync(connection, result, cancellationToken);
     }
 
@@ -83,6 +98,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
     {
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         await using var tx = await connection.BeginTransactionAsync(cancellationToken);
         foreach (var result in results)
             await InsertResultAsync(connection, result, cancellationToken, tx as SqliteTransaction);
@@ -123,6 +139,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
     {
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
         command.CommandText = """
             SELECT * FROM results
@@ -143,6 +160,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         var results = new List<ScanResultRecord>();
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM results WHERE session_id = $session ORDER BY timestamp_utc";
         command.Parameters.AddWithValue("$session", sessionId.ToString());
@@ -157,6 +175,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         var sessions = new List<ScanSessionRecord>();
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
         command.CommandText = """
             SELECT id, source_path, target_root, backup_root, action_mode, started_utc
@@ -183,6 +202,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
     {
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
         // Aggregate in SQL — never load all rows into memory for a summary.
         command.CommandText = """

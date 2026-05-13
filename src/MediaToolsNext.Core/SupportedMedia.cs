@@ -2,34 +2,23 @@ namespace MediaToolsNext.Core;
 
 public static class SupportedMedia
 {
-    public static readonly IReadOnlySet<string> ImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, MediaCategory> ExtensionToCategory = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".bmp", ".dib", ".gif", ".webp",
-        ".tif", ".tiff", ".heic", ".heif", ".avif", ".ico", ".raw", ".cr2", ".nef"
+        { ".jpg", MediaCategory.Image }, { ".jpeg", MediaCategory.Image }, { ".jpe", MediaCategory.Image }, { ".jfif", MediaCategory.Image },
+        { ".png", MediaCategory.Image }, { ".bmp", MediaCategory.Image }, { ".dib", MediaCategory.Image }, { ".gif", MediaCategory.Image },
+        { ".webp", MediaCategory.Image }, { ".tif", MediaCategory.Image }, { ".tiff", MediaCategory.Image }, { ".heic", MediaCategory.Image },
+        { ".heif", MediaCategory.Image }, { ".avif", MediaCategory.Image }, { ".ico", MediaCategory.Image }, { ".raw", MediaCategory.Image },
+        { ".cr2", MediaCategory.Image }, { ".nef", MediaCategory.Image },
+        { ".mp4", MediaCategory.Video }, { ".mkv", MediaCategory.Video }, { ".avi", MediaCategory.Video }, { ".mov", MediaCategory.Video },
+        { ".wmv", MediaCategory.Video }, { ".webm", MediaCategory.Video }, { ".m4v", MediaCategory.Video }, { ".mts", MediaCategory.Video },
+        { ".m2ts", MediaCategory.Video }, { ".ts", MediaCategory.Video }, { ".3gp", MediaCategory.Video }, { ".flv", MediaCategory.Video },
+        { ".mp3", MediaCategory.Audio }, { ".wav", MediaCategory.Audio }, { ".aiff", MediaCategory.Audio }, { ".flac", MediaCategory.Audio },
+        { ".ogg", MediaCategory.Audio }, { ".m4a", MediaCategory.Audio }, { ".wma", MediaCategory.Audio }, { ".aac", MediaCategory.Audio },
+        { ".pdf", MediaCategory.Document }, { ".docx", MediaCategory.Document }, { ".gdoc", MediaCategory.Document },
+        { ".rtf", MediaCategory.Document }, { ".txt", MediaCategory.Document }
     };
 
-    public static readonly IReadOnlySet<string> VideoExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mts", ".m2ts", ".ts", ".3gp", ".flv"
-    };
-
-    public static readonly IReadOnlySet<string> AudioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp3", ".wav", ".aiff", ".flac", ".ogg", ".m4a", ".wma", ".aac"
-    };
-
-    public static readonly IReadOnlySet<string> DocumentExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ".pdf", ".docx", ".gdoc", ".rtf", ".txt"
-    };
-
-    public static MediaCategory GetCategory(string extension)
-    {
-        if (ImageExtensions.Contains(extension)) return MediaCategory.Image;
-        if (VideoExtensions.Contains(extension)) return MediaCategory.Video;
-        if (AudioExtensions.Contains(extension)) return MediaCategory.Audio;
-        if (DocumentExtensions.Contains(extension)) return MediaCategory.Document;
-        return MediaCategory.Unknown;
-    }
+    public static MediaCategory GetCategory(string extension) =>
+        ExtensionToCategory.TryGetValue(extension, out var category) ? category : MediaCategory.Unknown;
 }
 

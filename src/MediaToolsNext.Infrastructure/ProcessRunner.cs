@@ -4,7 +4,7 @@ using System.Text;
 
 namespace MediaToolsNext.Infrastructure;
 
-internal sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError, bool TimedOut);
+internal sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError, bool TimedOut, bool ToolNotFound = false);
 
 internal sealed class ProcessRunner
 {
@@ -52,7 +52,7 @@ internal sealed class ProcessRunner
         }
         catch (Win32Exception ex)
         {
-            return new ProcessResult(-1, string.Empty, $"tool_not_found: {fileName} — {ex.Message}", false);
+            return new ProcessResult(-1, string.Empty, $"tool_not_found: {fileName} — {ex.Message}", false, true);
         }
 
         process.BeginOutputReadLine();
@@ -67,9 +67,13 @@ internal sealed class ProcessRunner
                 stderr.ToString().Trim(),
                 false);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
+
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+
             return new ProcessResult(-1, stdout.ToString().Trim(), stderr.ToString().Trim(), true);
         }
     }
