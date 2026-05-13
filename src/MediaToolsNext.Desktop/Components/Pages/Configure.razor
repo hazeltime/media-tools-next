@@ -1,0 +1,326 @@
+@page "/"
+@page "/configure"
+@inject ScanWorkflowState State
+@inject FolderPickerService Picker
+@inject IExternalToolProbe ToolProbe
+
+<div class="configure-page">
+
+    <!-- ═══ SECTION: Folders & Mode ══════════════════════════════════════════ -->
+    <section class="cfg-section">
+        <div class="cfg-section-head">
+            <span class="cfg-step">1</span>
+            <div>
+                <h2>Setup</h2>
+                <p class="muted">Source folder and write mode. Originals are never modified.</p>
+            </div>
+        </div>
+
+        <div class="cfg-body">
+            <!-- Mode selector -->
+            <div class="card-grid three">
+                <button class="select-card @(State.Mode == ScanActionMode.DryRun            ? "active" : "")" @onclick="() => SetMode(ScanActionMode.DryRun)">
+                    <strong>Log only</strong><span>Validate and record results. No target writes.</span>
+                </button>
+                <button class="select-card @(State.Mode == ScanActionMode.CopySorted        ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySorted)">
+                    <strong>Copy sorted</strong><span>Copy selected outcomes to target.</span>
+                </button>
+                <button class="select-card @(State.Mode == ScanActionMode.CopySortedAndBackup ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySortedAndBackup)">
+                    <strong>Copy + backup</strong><span>Copy to target and mirror to backup.</span>
+                </button>
+            </div>
+
+            <!-- Folder paths -->
+            <div class="cfg-folders">
+                <label>
+                    Source folder
+                    <small>Scanned recursively. Originals are not changed.</small>
+                    <div class="input-action">
+                        <input @bind="State.SourcePath" />
+                        <button @onclick="PickSource">Browse</button>
+                    </div>
+                </label>
+                @if (State.Mode != ScanActionMode.DryRun)
+                {
+                    <label>
+                        Target folder
+                        <small>Sorted copies land here, split by outcome.</small>
+                        <div class="input-action">
+                            <input @bind="State.TargetRoot" />
+                            <button @onclick="PickTarget">Browse</button>
+                        </div>
+                    </label>
+                }
+                @if (State.Mode == ScanActionMode.CopySortedAndBackup)
+                {
+                    <label>
+                        Backup folder
+                        <small>Mirror of the sorted target copies.</small>
+                        <div class="input-action">
+                            <input @bind="State.BackupRoot" />
+                            <button @onclick="PickBackup">Browse</button>
+                        </div>
+                    </label>
+                }
+            </div>
+
+            @if (State.Mode != ScanActionMode.DryRun)
+            {
+                <label class="choice confirm cfg-confirm">
+                    <input type="checkbox" @bind="State.ConfirmedLiveMode" />
+                    I understand this mode writes file copies.
+                </label>
+            }
+
+            <!-- Hard limits -->
+            <div class="cfg-subsection">
+                <h3>Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
+                <div class="form-grid three">
+                    <label>Max scan seconds   <input type="number" min="0" @bind="State.MaxRuntimeSeconds" /></label>
+                    <label>@(State.IsImageOnly ? "Max image files" : "Max matched files")  <input type="number" min="0" @bind="State.MaxMatchedFiles" /></label>
+                    <label>@(State.IsImageOnly ? "Max total image MB" : "Max total matched MB") <input type="number" min="0" @bind="State.MaxMatchedMb" /></label>
+                </div>
+                <div class="button-row" style="margin-top:10px">
+                    <button @onclick="Defaults">Default limits</button>
+                    <button class="secondary" @onclick="Clear">Unlimited (set all to 0)</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="cfg-divider"></div>
+
+    <!-- ═══ SECTION: Media & Filters ════════════════════════════════════════ -->
+    <section class="cfg-section">
+        <div class="cfg-section-head">
+            <span class="cfg-step">2</span>
+            <div>
+                <h2>Media &amp; filters</h2>
+                <p class="muted">Which file families to scan and optional filename / size filters.</p>
+            </div>
+        </div>
+
+        <div class="cfg-body">
+            <!-- Preset cards -->
+            <div class="cfg-subsection">
+                <h3>Image scan preset</h3>
+                <div class="card-grid three">
+                    @foreach (var profile in ScanProfiles.All)
+                    {
+                        <button class="select-card @(State.ProfileName == profile.Name ? "active" : "")" @onclick="() => State.ApplyProfile(profile.Name)">
+                            <strong>@ProfileLabel(profile)</strong>
+                            <span>@profile.Description</span>
+                            <small>@ScanWorkflowState.DepthLabel(profile.ValidationDepth)</small>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- File families -->
+            <div class="cfg-subsection">
+                <h3>File families</h3>
+                <div class="form-grid four">
+                    <label class="choice"><input type="checkbox" @bind="State.EnableImages"    /> Images</label>
+                    <label class="choice"><input type="checkbox" @bind="State.EnableVideo"     /> Video</label>
+                    <label class="choice"><input type="checkbox" @bind="State.EnableAudio"     /> Audio</label>
+                    <label class="choice"><input type="checkbox" @bind="State.EnableDocuments" /> Documents</label>
+                </div>
+                @if (State.EnableImages)
+                {
+                    <div class="extension-cloud">
+                        @foreach (var ext in SupportedMedia.ImageExtensions.OrderBy(x => x)) { <span>@ext</span> }
+                    </div>
+                }
+            </div>
+
+            <!-- Custom types + filters in a 2-col grid -->
+            <div class="cfg-subsection">
+                <h3>Custom image types &amp; include filters</h3>
+                <div class="form-grid two">
+                    <label>
+                        Extra image extensions
+                        <small>Accepts jpg, .jpg, or *.jpg — space-separated.</small>
+                        <textarea rows="3" @bind="State.CustomImageExtensionsText" />
+                    </label>
+                    <label>
+                        Custom image filename regex
+                        <small class="@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "" : "regex-invalid")">
+                            @(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "⚠ Regex is invalid.")
+                        </small>
+                        <input @bind="State.CustomImageRegex" />
+                    </label>
+                    <label>
+                        Include filename wildcards
+                        <small>Example: IMG_* *.jpg</small>
+                        <textarea rows="3" @bind="State.IncludePatternsText" />
+                    </label>
+                    <label>
+                        Exclude filename wildcards
+                        <small>Example: thumb_* *_small.*</small>
+                        <textarea rows="3" @bind="State.ExcludePatternsText" />
+                    </label>
+                </div>
+            </div>
+
+            <!-- Size filters in same row -->
+            <div class="form-grid two">
+                <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
+                <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
+            </div>
+        </div>
+    </section>
+
+    <div class="cfg-divider"></div>
+
+    <!-- ═══ SECTION: Validation ══════════════════════════════════════════════ -->
+    <section class="cfg-section">
+        <div class="cfg-section-head">
+            <span class="cfg-step">3</span>
+            <div>
+                <h2>Validation</h2>
+                <p class="muted">How hard the app tries to prove a file is readable.</p>
+            </div>
+        </div>
+
+        <div class="cfg-body">
+            <!-- Depth cards -->
+            <div class="card-grid three">
+                @foreach (var depth in Enum.GetValues<ValidationDepth>())
+                {
+                    <button class="select-card @(State.ValidationDepth == depth ? "active" : "")" @onclick="() => State.ValidationDepth = depth">
+                        <strong>@ScanWorkflowState.DepthLabel(depth)</strong>
+                        <span>@ScanWorkflowState.DepthExplanation(depth)</span>
+                    </button>
+                }
+            </div>
+
+            <!-- Tools + performance -->
+            <div class="cfg-subsection">
+                <h3>Tools &amp; performance</h3>
+                @if (ToolProbe.GetStatuses().All(t => !t.IsAvailable))
+                {
+                    <div class="preflight-item error cfg-tool-warn">⚠ No external tools found. Deep validation will fall back to header checks only.</div>
+                }
+                <div class="tool-row">
+                    @foreach (var tool in ToolProbe.GetStatuses())
+                    {
+                        <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.IsAvailable ? tool.Path : "Not found on PATH")">@tool.Name</span>
+                    }
+                </div>
+                <div class="form-grid three" style="margin-top:12px">
+                    <label>
+                        Concurrency: @State.Concurrency
+                        <div class="slider-row">
+                            <span class="slider-label">1</span>
+                            <input type="range" min="1" max="32" @bind="State.Concurrency" @bind:event="oninput" />
+                            <span class="slider-label">32</span>
+                        </div>
+                    </label>
+                    <label>Tool timeout seconds <input type="number" min="5" max="600" @bind="State.ToolTimeoutSeconds" /></label>
+                    @if (State.EnableAudio || State.EnableVideo)
+                    {
+                        <label>Media probe seconds <input type="number" min="10" max="600" @bind="State.ProbeSeconds" /></label>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="cfg-divider"></div>
+
+    <!-- ═══ SECTION: Output ══════════════════════════════════════════════════ -->
+    <section class="cfg-section">
+        <div class="cfg-section-head">
+            <span class="cfg-step">4</span>
+            <div>
+                <h2>Output</h2>
+                <p class="muted">Which outcomes to copy and how results are exported.</p>
+            </div>
+        </div>
+
+        <div class="cfg-body">
+            <!-- Copy outcomes -->
+            <div class="cfg-subsection">
+                <h3>Copy outcomes</h3>
+                @if (State.Mode == ScanActionMode.DryRun)
+                {
+                    <p class="muted">Log only mode — no files are copied. Applies when a copy mode is selected above.</p>
+                    <div class="form-grid four choice-disabled">
+                        @foreach (var status in Copyable)
+                        {
+                            <label class="choice"><input type="checkbox" disabled checked="@State.CopyStatuses.Contains(status)" /> @status</label>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="muted">Only selected outcomes are copied.</p>
+                    <div class="form-grid four">
+                        @foreach (var status in Copyable)
+                        {
+                            <label class="choice"><input type="checkbox" checked="@State.CopyStatuses.Contains(status)" @onchange="e => Toggle(status, (bool)e.Value!)" /> @status</label>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Report defaults -->
+            <div class="cfg-subsection">
+                <h3>Report defaults</h3>
+                <div class="form-grid three">
+                    <label>Format
+                        <select @bind="State.ReportFormat">
+                            <option value="csv">CSV — full structured export</option>
+                            <option value="txt">TXT — tab-separated plain text</option>
+                        </select>
+                    </label>
+                    <label>Sort
+                        <select @bind="State.ReportSort">
+                            <option value="status-path">Status then path</option>
+                            <option value="path">Path</option>
+                            <option value="size-desc">Largest first</option>
+                            <option value="time">Scan order</option>
+                        </select>
+                    </label>
+                    <label class="choice" style="align-self:end">
+                        <input type="checkbox" @bind="State.GroupReportByStatus" /> Group by status
+                    </label>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+@code {
+    private static readonly ValidationStatus[] Copyable =
+        [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
+
+    private async Task PickSource() => State.SourcePath = await Picker.PickFolderAsync("Select source folder",  State.SourcePath)  ?? State.SourcePath;
+    private async Task PickTarget() => State.TargetRoot = await Picker.PickFolderAsync("Select target folder",  State.TargetRoot)  ?? State.TargetRoot;
+    private async Task PickBackup() => State.BackupRoot = await Picker.PickFolderAsync("Select backup folder",  State.BackupRoot)  ?? State.BackupRoot;
+
+    private void SetMode(ScanActionMode mode)
+    {
+        if (State.Mode != mode) State.ConfirmedLiveMode = false;
+        State.Mode = mode;
+    }
+
+    private void Toggle(ValidationStatus status, bool enabled)
+    {
+        if (enabled) State.CopyStatuses.Add(status);
+        else         State.CopyStatuses.Remove(status);
+    }
+
+    private void Defaults() { State.MaxRuntimeSeconds = 30; State.MaxMatchedFiles = 10000; State.MaxMatchedMb = 10240; }
+    private void Clear()    { State.MaxRuntimeSeconds = 0;  State.MaxMatchedFiles = 0;     State.MaxMatchedMb = 0; }
+
+    private static string ProfileLabel(ScanProfile profile) => profile.Name switch
+    {
+        "quick-images"    => "Quick image check",
+        "standard-images" => "Medium image check",
+        "deep-images"     => "In-depth image check",
+        "all-media"       => "All media",
+        _                 => profile.Name
+    };
+}

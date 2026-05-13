@@ -10,24 +10,21 @@
     <nav class="nav flex-column">
         <div class="nav-section">Workflow</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="setup"><span class="bi bi-folder-nav-menu" aria-hidden="true"></span> 1 · Setup</NavLink>
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-folder-nav-menu" aria-hidden="true"></span> Configure
+            </NavLink>
         </div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="media"><span class="bi bi-image-nav-menu" aria-hidden="true"></span> 2 · Media</NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="validation"><span class="bi bi-check-nav-menu" aria-hidden="true"></span> 3 · Validation</NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="output"><span class="bi bi-table-nav-menu" aria-hidden="true"></span> 4 · Output</NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="run"><span class="bi bi-check-nav-menu" aria-hidden="true"></span> 5 · Run</NavLink>
+            <NavLink class="nav-link" href="run">
+                <span class="bi bi-check-nav-menu" aria-hidden="true"></span> Run
+            </NavLink>
         </div>
 
         <div class="nav-section">Review</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="results" Match="NavLinkMatch.All"><span class="bi bi-table-nav-menu" aria-hidden="true"></span> Results · All</NavLink>
+            <NavLink class="nav-link" href="results" Match="NavLinkMatch.All">
+                <span class="bi bi-table-nav-menu" aria-hidden="true"></span> Results · All
+            </NavLink>
         </div>
         <div class="nav-item px-3 nav-sub">
             <NavLink class="nav-link nav-link-sub" href="results/valid"><span class="status-dot valid"></span> Valid</NavLink>
@@ -45,10 +42,14 @@
             <NavLink class="nav-link nav-link-sub" href="results/skipped"><span class="status-dot skipped"></span> Skipped</NavLink>
         </div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="history"><span class="bi bi-clock-nav-menu" aria-hidden="true"></span> Saved scans</NavLink>
+            <NavLink class="nav-link" href="history">
+                <span class="bi bi-clock-nav-menu" aria-hidden="true"></span> Saved scans
+            </NavLink>
         </div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="help"><span class="bi bi-help-nav-menu" aria-hidden="true"></span> Help</NavLink>
+            <NavLink class="nav-link" href="help">
+                <span class="bi bi-help-nav-menu" aria-hidden="true"></span> Help
+            </NavLink>
         </div>
 
         <div class="nav-item px-3 nav-about-item">
