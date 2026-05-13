@@ -89,7 +89,11 @@ public sealed class MediaStreamValidator(MediaCategory category, IExternalToolPr
 
             var ffmpeg = tools.FindExecutable("ffmpeg");
             if (ffmpeg is null)
-                return new(candidate, ValidationStatus.Valid, "ffprobe", "ffmpeg_missing_after_ffprobe_ok", sw.Elapsed);
+                // FIX: deep validation was requested but could not be performed because
+                // ffmpeg is missing. Returning Valid here would be a false positive —
+                // ffprobe only checked container/stream metadata, not frame-level integrity.
+                // Return Unknown so the caller knows the result is inconclusive.
+                return new(candidate, ValidationStatus.Unknown, "ffprobe", "ffmpeg_missing_deep_incomplete", sw.Elapsed);
 
             var deepArgs = new[]
             {
