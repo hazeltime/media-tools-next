@@ -2,17 +2,17 @@
    Tokens
    ══════════════════════════════════════════════════════════════════════════ */
 :root {
-    --c-bg:          #eef3f5;
+    --c-bg:          #e8f0f2;
     --c-surface:     #ffffff;
-    --c-surface-2:   #f8fafc;
-    --c-border:      #d9e1e7;
-    --c-border-soft: #e6edf2;
-    --c-text:        #17202a;
-    --c-muted:       #53606d;
-    --c-accent:      #116466;
-    --c-accent-bg:   #eaf7fb;
-    --c-accent-dark: #0d4f51;
-    --c-secondary:   #334e68;
+    --c-surface-2:   #f3f8f8;
+    --c-border:      #c7d6dc;
+    --c-border-soft: #dde8ec;
+    --c-text:        #0f1f2d;
+    --c-muted:       #425466;
+    --c-accent:      #0f766e;
+    --c-accent-bg:   #dff8f3;
+    --c-accent-dark: #0b4f4a;
+    --c-secondary:   #1f3a4d;
     --c-danger:      #b42318;
     --c-disabled:    #94a3b8;
 
@@ -26,7 +26,7 @@
     --gap-lg:  16px;
     --gap-xl:  24px;
 
-    --font-ui: "Segoe UI", Arial, sans-serif;
+    --font-ui: "Aptos", "Segoe UI", Arial, sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -35,7 +35,10 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-    background: var(--c-bg);
+    background:
+        linear-gradient(135deg, rgba(15,118,110,.10), transparent 34%),
+        linear-gradient(315deg, rgba(31,58,77,.08), transparent 42%),
+        var(--c-bg);
     color: var(--c-text);
     font-family: var(--font-ui);
     font-size: 14px;
@@ -140,6 +143,7 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
     background: var(--c-surface);
     border: 1px solid var(--c-border);
     border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(15, 31, 45, .06);
     padding: var(--gap-lg);
 }
 .panel h2 { font-size: 17px; margin-bottom: var(--gap-md); margin-top: 0; }
@@ -479,7 +483,19 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 }
 .progress-metric span { align-items: center; display: flex; justify-content: space-between; }
 .progress-metric em { color: var(--c-muted); font-style: normal; font-weight: 800; }
-.progress-metric progress { accent-color: var(--c-accent); height: 10px; width: 100%; }
+.progress-track {
+    background: #d8e5e9;
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+    width: 100%;
+}
+.progress-track div {
+    background: linear-gradient(90deg, #0f766e, #38bdf8);
+    border-radius: inherit;
+    height: 100%;
+    transition: width 260ms ease;
+}
 .live-counts { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
 .live-count {
     align-items: center;
@@ -495,10 +511,10 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 .live-count-label  { font-size: 11px; font-weight: 700; letter-spacing: .04em; opacity: .75; text-transform: uppercase; }
 .live-count-percent { font-size: 11px; font-weight: 900; opacity: .85; }
 .live-count.total   { background: #f1f5f9; color: var(--c-text); }
-.live-count.valid   { background: #dcfce7; color: #166534; }
-.live-count.corrupt { background: #fee2e2; color: #991b1b; }
-.live-count.unknown { background: #fef3c7; color: #92400e; }
-.live-count.error   { background: #ffe4e6; color: #9f1239; }
+.live-count.valid   { background: #d9fbe8; color: #14532d; }
+.live-count.corrupt { background: #ffe1e1; color: #8f1111; }
+.live-count.unknown { background: #fff0c2; color: #78350f; }
+.live-count.error   { background: #ffdce5; color: #881337; }
 .live-count.skipped { background: #e6edf2; color: var(--c-secondary); }
 .live-count.perf    { background: #eff6ff; color: #1d4ed8; }
 .live-count.searched { background: #f1f5f9; color: var(--c-text); }
@@ -565,9 +581,9 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     font-weight: 800;
     padding: 2px 8px;
 }
-.status-pill.valid                         { background: #dcfce7; color: #166534; }
-.status-pill.corrupt, .status-pill.error   { background: #fee2e2; color: #991b1b; }
-.status-pill.unknown                       { background: #fef3c7; color: #92400e; }
+.status-pill.valid                         { background: #d9fbe8; color: #14532d; }
+.status-pill.corrupt, .status-pill.error   { background: #ffe1e1; color: #8f1111; }
+.status-pill.unknown                       { background: #fff0c2; color: #78350f; }
 .status-pill.skipped                       { background: #e6edf2; color: var(--c-secondary); }
 .empty-cell { color: var(--c-muted); padding: 28px; text-align: center; }
 .result-path-button {
@@ -594,6 +610,48 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     text-transform: uppercase;
 }
 .result-group-heading span { color: var(--c-muted); font-size: 12px; }
+.results-workspace:focus { outline: none; }
+.results-actions { padding: 10px 12px; }
+.result-tree details { border-left: 2px solid var(--c-border-soft); margin-left: 4px; padding-left: 10px; }
+.result-tree summary { cursor: pointer; font-weight: 800; padding: 5px 0; }
+.tree-grid { display: grid; gap: var(--gap-xs); }
+.tree-leaf {
+    background: transparent;
+    border: 0;
+    color: var(--c-secondary);
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    text-align: left;
+}
+.tree-leaf:hover { background: var(--c-accent-bg); color: var(--c-accent-dark); }
+.select-col { width: 42px; }
+.current-row { background: #ecfeff; outline: 2px solid rgba(15,118,110,.22); }
+.pager {
+    align-items: center;
+    background: var(--c-surface);
+    bottom: 0;
+    display: flex;
+    gap: var(--gap-sm);
+    justify-content: flex-end;
+    padding-top: var(--gap-sm);
+    position: sticky;
+}
+.preview-panel {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(15, 31, 45, .10);
+    display: grid;
+    gap: var(--gap-md);
+    min-width: 280px;
+    overflow: auto;
+    padding: var(--gap-md);
+    resize: horizontal;
+    width: 34vw;
+}
+.preview-panel.collapsed { resize: none; width: auto; }
+.preview-content { display: grid; justify-items: center; }
 .preview-overlay {
     align-items: center;
     background: rgba(15, 23, 42, .62);

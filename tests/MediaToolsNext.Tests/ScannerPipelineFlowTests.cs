@@ -181,6 +181,30 @@ public class ScannerPipelineFlowTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task PipelineCountsSkippedWhenMatchedCategoryHasNoValidator()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
+            var db = Path.Combine(root, "state.db");
+            var pipeline = new ScannerPipeline(
+                new FileDiscoverer(),
+                new ValidatorRegistry([]),
+                new FileActionService(),
+                new SqliteScanStore(db),
+                new ScanControl());
+
+            var summary = await pipeline.RunAsync(ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db), null, CancellationToken.None);
+
+            Assert.Equal(1, summary.Skipped);
+            Assert.Equal(0, summary.Unknown);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class CountingValidator : IMediaValidator
     {
         public int Calls { get; private set; }

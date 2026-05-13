@@ -6,7 +6,7 @@
 @inject NavigationManager Nav
 @implements IDisposable
 
-<div class="page-stack">
+<div class="page-stack results-workspace" tabindex="0" @onkeydown="HandleKeyAsync">
     <header class="page-header">
         <p class="eyebrow">Review</p>
         <h1>Results</h1>
@@ -43,7 +43,6 @@
             <button class="summary-tile @(ActiveTab == "searched" ? "active" : "") searched"
                     @onclick='() => SetTab("searched")'>
                 <strong>@State.TotalSearched.ToString("N0")</strong><span>Searched</span>
-                <small>@FormatPercent(State.TotalSearched, State.TotalSearched)</small>
             </button>
             <button class="summary-tile @(ActiveTab == "filtered-size" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-size")'>
@@ -120,6 +119,14 @@
                     }
                 </select>
             </label>
+            <label>Rows
+                <select @bind="_pageSize" @bind:after="ResetPage">
+                    <option value="25">25/page</option>
+                    <option value="50">50/page</option>
+                    <option value="100">100/page</option>
+                    <option value="250">250/page</option>
+                </select>
+            </label>
             @* P2 fix: describe what will be exported before the user clicks *@
             <button class="secondary" disabled="@(!State.Results.Any())" @onclick="ExportAsync"
                     title="Export @State.Results.Count.ToString("N0") results as @State.ReportFormat.ToUpperInvariant()">
@@ -128,6 +135,19 @@
         </section>
 
         <!-- Context actions per tab -->
+        <section class="panel results-actions">
+            <div class="action-bar">
+                <button class="secondary" disabled="@(!_pagedRows.Any())" @onclick="SelectPage">Select page</button>
+                <button class="secondary" disabled="@(!_visibleRows.Any())" @onclick="SelectFiltered">Select filtered</button>
+                <button class="secondary" disabled="@(_selectedKeys.Count == 0)" @onclick="ClearSelection">Clear selection</button>
+                <button disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Copy, OutputPathLayout.PreserveRelativePath)">Copy relative</button>
+                <button disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Copy, OutputPathLayout.Flat)">Copy flat</button>
+                <button class="danger" disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Move, OutputPathLayout.PreserveRelativePath)">Move relative</button>
+                <button class="danger" disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Move, OutputPathLayout.Flat)">Move flat</button>
+            </div>
+            <p class="muted">@_selectedKeys.Count.ToString("N0") selected. Batch writes use the filtered source paths and keep current result rows unchanged.</p>
+        </section>
+
         @if (ActiveTab == "corrupt")
         {
             <section class="panel context-actions">
@@ -159,7 +179,7 @@
                     <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Unknown)">Export list (CSV)</button>
                     <button class="secondary" @onclick="CopyUnknownPaths">Copy visible paths to clipboard</button>
                 </div>
-                <p class="muted" style="margin-top:0.5rem">Unknown means the validator ran but could not determine validity — typically truncated or partially-written files, or validator returned no decisive result.</p>
+                <p class="muted" style="margin-top:0.5rem">Unknown means validation was inconclusive, not proven corrupt: missing external tools, encrypted PDFs, warning-only tool results, unknown image headers, or a validator that could not make a definitive decision.</p>
             </section>
         }
         else if (ActiveTab == "error")
@@ -177,22 +197,41 @@
         {
             <section class="panel context-actions">
                 <h2>Skipped files</h2>
-                <p class="muted">Skipped means the file reached the pipeline but had no validator assigned — typically access-denied stubs or a file category that was disabled after the scan started.</p>
+                <p class="muted">Skipped is a pipeline-only result for matched files that had no validator. Most unsupported or disabled files are counted earlier as Filtered family, so Skipped is normally zero.</p>
             </section>
         }
 
+        <section class="panel result-tree">
+            <details open>
+                <summary>Result tree</summary>
+                <div class="tree-grid">
+                    @foreach (var statusGroup in State.Results.GroupBy(r => r.Status).OrderBy(g => g.Key))
+                    {
+                        <details open="@IsTreeOpen(statusGroup.Key.ToString())">
+                            <summary @onclick="() => ToggleTree(statusGroup.Key.ToString())">@statusGroup.Key <span>@statusGroup.Count().ToString("N0")</span></summary>
+                            @foreach (var categoryGroup in statusGroup.GroupBy(r => r.Candidate.Category).OrderBy(g => g.Key))
+                            {
+                                <button class="tree-leaf" @onclick="() => ApplyTreeFilter(statusGroup.Key, categoryGroup.Key)">
+                                    @categoryGroup.Key <span>@categoryGroup.Count().ToString("N0")</span>
+                                </button>
+                            }
+                        </details>
+                    }
+                </div>
+            </details>
+        </section>
+
         <!-- Results table -->
-        <section class="panel results-panel">
+        <section class="panel results-panel @( _previewPinned ? "with-preview" : "")">
             <div class="result-count">
                 <strong>@_filteredCount.ToString("N0")</strong>
                 <span>
-                    @if (_filteredCount > 500) { <text>matching rows — showing first 500.</text> }
-                    else { <text>matching rows.</text> }
+                    page @(_page + 1) of @TotalPages, showing @_pagedRows.Count.ToString("N0") rows.
                 </span>
             </div>
             @if (State.GroupReportByStatus && _visibleRows.Count > 0)
             {
-                @foreach (var group in _visibleRows.GroupBy(r => r.Status))
+                @foreach (var group in _pagedRows.GroupBy(r => r.Status))
                 {
                     <h3 class="result-group-heading">@group.Key <span>@group.Count().ToString("N0")</span></h3>
                     @ResultTable(group)
@@ -200,41 +239,72 @@
             }
             else
             {
-                @ResultTable(_visibleRows)
+                @ResultTable(_pagedRows)
             }
+            <div class="pager">
+                <button class="secondary compact" disabled="@(_page == 0)" @onclick="PreviousPage">Prev</button>
+                <span>@((_pageStart + 1).ToString("N0"))-@Math.Min(_pageStart + _pageSize, _filteredCount).ToString("N0") of @_filteredCount.ToString("N0")</span>
+                <button class="secondary compact" disabled="@(_page >= TotalPages - 1)" @onclick="NextPage">Next</button>
+            </div>
         </section>
+
+        @if (_previewPinned)
+        {
+            <aside class="preview-panel @(_previewCollapsed ? "collapsed" : "")">
+                <div class="preview-head">
+                    <strong>@(_previewRow?.Candidate.RelativePath ?? "Preview")</strong>
+                    <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="PreviousImageAsync">Prev</button>
+                    <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="NextImageAsync">Next</button>
+                    <button class="secondary compact" @onclick="() => _previewCollapsed = !_previewCollapsed">@(_previewCollapsed ? "Expand" : "Fold")</button>
+                    <button class="secondary compact" @onclick="() => _previewPinned = false">Unpin</button>
+                </div>
+                @if (!_previewCollapsed)
+                {
+                    @PreviewContent()
+                }
+            </aside>
+        }
     }
 
-    @if (_previewRow is not null)
+    @if (_previewRow is not null && !_previewPinned)
     {
         <div class="preview-overlay" @onclick="ClosePreview" role="dialog" aria-modal="true" aria-label="Image preview">
             <div class="preview-box" @onclick:stopPropagation>
                 <div class="preview-head">
                     <strong>@_previewRow.Candidate.RelativePath</strong>
+                    <button class="secondary compact" @onclick="() => _previewPinned = true">Pin</button>
+                    <button class="secondary compact" @onclick="PreviousImageAsync">Prev</button>
+                    <button class="secondary compact" @onclick="NextImageAsync">Next</button>
                     <button class="secondary compact" @onclick="OpenPreviewExternal">Open</button>
                     <button class="secondary compact" @onclick="ClosePreview">Close</button>
                 </div>
-                @if (_previewDataUri is not null)
-                {
-                    <img src="@_previewDataUri" alt="@_previewRow.Candidate.RelativePath" />
-                }
-                else
-                {
-                    <p class="muted">Preview is unavailable for this file size or type. Use Open to launch it externally.</p>
-                }
+                @PreviewContent()
             </div>
         </div>
     }
 </div>
 
 @code {
+    private RenderFragment PreviewContent() => @<div class="preview-content">
+        @if (_previewDataUri is not null && _previewRow is not null)
+        {
+            <img src="@_previewDataUri" alt="@_previewRow.Candidate.RelativePath" />
+        }
+        else
+        {
+            <p class="muted">Preview is unavailable for this file size or type. Use Open to launch it externally.</p>
+        }
+    </div>;
+
     private RenderFragment ResultTable(IEnumerable<ScanResultRecord> rows) => @<table class="results-table">
-                <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
-                <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
+                <colgroup><col class="select-col" /><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
+                <thead><tr><th><input type="checkbox" checked="@IsPageSelected" @onchange="e => TogglePage((bool)e.Value!)" /></th><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
                 <tbody>
                     @foreach (var row in rows)
                     {
-                        <tr>
+                        var key = RowKey(row);
+                        <tr class="@(IsCurrentPreview(row) ? "current-row" : "")">
+                            <td><input type="checkbox" checked="@_selectedKeys.Contains(key)" @onchange="e => ToggleRow(row, (bool)e.Value!)" /></td>
                             <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
                             <td>@row.Candidate.Category</td>
                             <td title="@row.Candidate.FullPath">
@@ -264,9 +334,20 @@
     private string _searchText = string.Empty;
     private string _detailGroup = string.Empty;
     private List<ScanResultRecord> _visibleRows  = [];
+    private List<ScanResultRecord> _pagedRows  = [];
+    private List<ScanResultRecord> _imageRows = [];
     private int                    _filteredCount = 0;
+    private int _page;
+    private int _pageSize = 50;
+    private int _pageStart => _page * _pageSize;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filteredCount / (double)_pageSize));
+    private readonly HashSet<string> _selectedKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _openTree = new(StringComparer.OrdinalIgnoreCase);
+    private MediaCategory? _treeCategoryFilter;
     private ScanResultRecord? _previewRow;
     private string? _previewDataUri;
+    private bool _previewPinned = true;
+    private bool _previewCollapsed;
 
     private string TabTitle => ActiveTab switch
     {
@@ -359,6 +440,7 @@
         var filtered = sorted.Where(r =>
         {
             if (statusFilter.HasValue && r.Status != statusFilter.Value) return false;
+            if (_treeCategoryFilter.HasValue && r.Candidate.Category != _treeCategoryFilter.Value) return false;
             if (!string.IsNullOrWhiteSpace(_detailGroup) && !NormalizeDetail(r.Detail).Equals(_detailGroup, StringComparison.OrdinalIgnoreCase)) return false;
             if (string.IsNullOrWhiteSpace(_searchText)) return true;
             return r.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -368,7 +450,10 @@
         }).ToList();
 
         _filteredCount = filtered.Count;
-        _visibleRows   = filtered.Take(500).ToList();
+        _visibleRows   = filtered;
+        _page = Math.Clamp(_page, 0, TotalPages - 1);
+        _pagedRows = _visibleRows.Skip(_pageStart).Take(_pageSize).ToList();
+        _imageRows = _visibleRows.Where(r => r.Candidate.Category == MediaCategory.Image).ToList();
     }
 
     private Task CopyCorruptPaths()  => CopyPathsForStatus(ValidationStatus.Corrupt);
@@ -401,6 +486,116 @@
                 || r.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
         });
 
+    private bool IsPageSelected => _pagedRows.Count > 0 && _pagedRows.All(r => _selectedKeys.Contains(RowKey(r)));
+    private static string RowKey(ScanResultRecord row) => row.Candidate.FullPath + "|" + row.TimestampUtc.ToUnixTimeMilliseconds();
+    private bool IsCurrentPreview(ScanResultRecord row) => _previewRow is not null && RowKey(_previewRow) == RowKey(row);
+
+    private void ToggleRow(ScanResultRecord row, bool selected)
+    {
+        var key = RowKey(row);
+        if (selected) _selectedKeys.Add(key);
+        else _selectedKeys.Remove(key);
+    }
+
+    private void TogglePage(bool selected)
+    {
+        foreach (var row in _pagedRows)
+            ToggleRow(row, selected);
+    }
+
+    private void SelectPage()
+    {
+        foreach (var row in _pagedRows)
+            _selectedKeys.Add(RowKey(row));
+    }
+
+    private void SelectFiltered()
+    {
+        foreach (var row in _visibleRows)
+            _selectedKeys.Add(RowKey(row));
+    }
+
+    private void ClearSelection() => _selectedKeys.Clear();
+
+    private void PreviousPage()
+    {
+        if (_page > 0) _page--;
+        RebuildCache();
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages - 1) _page++;
+        RebuildCache();
+    }
+
+    private void ResetPage()
+    {
+        _page = 0;
+        RebuildCache();
+    }
+
+    private bool IsTreeOpen(string key) => _openTree.Contains(key);
+    private void ToggleTree(string key)
+    {
+        if (!_openTree.Add(key))
+            _openTree.Remove(key);
+    }
+
+    private void ApplyTreeFilter(ValidationStatus status, MediaCategory category)
+    {
+        _treeCategoryFilter = category;
+        SetTab(status.ToString().ToLowerInvariant());
+    }
+
+    private async Task WriteSelectedAsync(FileActionOperation operation, OutputPathLayout layout)
+    {
+        var destination = await Picker.PickFolderAsync($"{operation} selected files", State.TargetRoot);
+        if (string.IsNullOrWhiteSpace(destination)) return;
+        var selected = State.Results.Where(r => _selectedKeys.Contains(RowKey(r))).ToList();
+        var written = 0;
+        foreach (var row in selected)
+        {
+            if (!File.Exists(row.Candidate.FullPath)) continue;
+            var target = BuildManualTarget(destination, row, layout);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            target = GetSafePath(target);
+            if (operation == FileActionOperation.Copy)
+            {
+                File.Copy(row.Candidate.FullPath, target);
+            }
+            else
+            {
+                File.Move(row.Candidate.FullPath, target);
+            }
+            written++;
+        }
+        State.Message = $"{operation} completed for {written:N0} selected files.";
+        State.NotifyChanged();
+    }
+
+    private static string BuildManualTarget(string root, ScanResultRecord row, OutputPathLayout layout)
+    {
+        var relative = layout == OutputPathLayout.Flat ? Path.GetFileName(row.Candidate.RelativePath) : row.Candidate.RelativePath;
+        var parts = relative
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        return Path.Combine([root, .. parts]);
+    }
+
+    private static string GetSafePath(string target)
+    {
+        if (!File.Exists(target)) return target;
+        var dir = Path.GetDirectoryName(target)!;
+        var name = Path.GetFileNameWithoutExtension(target);
+        var ext = Path.GetExtension(target);
+        for (var i = 1; ; i++)
+        {
+            var candidate = Path.Combine(dir, $"{name}_{i}{ext}");
+            if (!File.Exists(candidate)) return candidate;
+        }
+    }
+
     private async Task PreviewImageAsync(ScanResultRecord row)
     {
         if (!File.Exists(row.Candidate.FullPath))
@@ -431,6 +626,33 @@
     {
         _previewRow = null;
         _previewDataUri = null;
+    }
+
+    private async Task PreviousImageAsync()
+    {
+        if (_imageRows.Count == 0) return;
+        var index = CurrentImageIndex();
+        index = index <= 0 ? _imageRows.Count - 1 : index - 1;
+        await PreviewImageAsync(_imageRows[index]);
+    }
+
+    private async Task NextImageAsync()
+    {
+        if (_imageRows.Count == 0) return;
+        var index = CurrentImageIndex();
+        index = index < 0 || index >= _imageRows.Count - 1 ? 0 : index + 1;
+        await PreviewImageAsync(_imageRows[index]);
+    }
+
+    private int CurrentImageIndex() =>
+        _previewRow is null ? -1 : _imageRows.FindIndex(r => RowKey(r) == RowKey(_previewRow));
+
+    private async Task HandleKeyAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+    {
+        if (args.Key is "PageDown" or "ArrowRight")
+            await NextImageAsync();
+        else if (args.Key is "PageUp" or "ArrowLeft")
+            await PreviousImageAsync();
     }
 
     private void OpenPreviewExternal()

@@ -51,15 +51,15 @@
             <div class="progress-strip">
                 <div class="progress-metric">
                     <span><strong>Time</strong><em>@Percent(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)</em></span>
-                    <progress max="100" value="@Progress(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)"></progress>
+                    <div class="progress-track"><div style="width:@ProgressStyle(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)"></div></div>
                 </div>
                 <div class="progress-metric">
                     <span><strong>Matched files</strong><em>@Percent(State.Results.Count, State.MaxMatchedFiles)</em></span>
-                    <progress max="100" value="@Progress(State.Results.Count, State.MaxMatchedFiles)"></progress>
+                    <div class="progress-track"><div style="width:@ProgressStyle(State.Results.Count, State.MaxMatchedFiles)"></div></div>
                 </div>
                 <div class="progress-metric">
                     <span><strong>Matched MB</strong><em>@Percent(State.MatchedMb, State.MaxMatchedMb)</em></span>
-                    <progress max="100" value="@Progress(State.MatchedMb, State.MaxMatchedMb)"></progress>
+                    <div class="progress-track"><div style="width:@ProgressStyle(State.MatchedMb, State.MaxMatchedMb)"></div></div>
                 </div>
             </div>
 
@@ -69,7 +69,6 @@
                 <div class="live-count searched" title="Every file the discoverer touched before any filter.">
                     <span class="live-count-value">@State.TotalSearched.ToString("N0")</span>
                     <span class="live-count-label">Searched</span>
-                    <span class="live-count-percent">@Percent(State.TotalSearched, State.TotalSearched)</span>
                 </div>
                 <div class="live-count filtered" title="Dropped by min/max file size filter.">
                     <span class="live-count-value">@State.FilteredOutSize.ToString("N0")</span>
@@ -207,6 +206,7 @@
         : $"{t.Minutes:D2}m {t.Seconds:D2}s";
     private static string Percent(double value, double total) => total <= 0 ? "n/a" : $"{Math.Clamp(value / total, 0, 1):P0}";
     private static double Progress(double value, double total) => total <= 0 ? 0 : Math.Clamp(value / total * 100d, 0, 100);
+    private static string ProgressStyle(double value, double total) => $"{Progress(value, total):0.##}%";
 
     protected override void OnInitialized()
     {
