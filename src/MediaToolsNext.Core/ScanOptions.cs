@@ -47,7 +47,7 @@ public sealed record ScanOptions(
             EnableVideo: true,
             EnableAudio: true,
             EnableDocuments: true,
-            MaxConcurrency: Math.Max(1, (Environment.ProcessorCount + 1) / 2),
+            MaxConcurrency: 8,
             MediaProbeSeconds: 120,
             databasePath);
 }

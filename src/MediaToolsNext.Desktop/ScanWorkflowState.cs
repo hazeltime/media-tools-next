@@ -10,15 +10,15 @@ public sealed class ScanWorkflowState
     public string TargetRoot { get; set; } = @"E:\_output_";
     public string? BackupRoot { get; set; } = @"G:\_backup_";
     public ScanActionMode Mode { get; set; } = ScanActionMode.DryRun;
-    public string ProfileName { get; set; } = ScanProfiles.StandardImages.Name;
-    public ValidationDepth ValidationDepth { get; set; } = ValidationDepth.Standard;
+    public string ProfileName { get; set; } = ScanProfiles.DeepImages.Name;
+    public ValidationDepth ValidationDepth { get; set; } = ValidationDepth.Deep;
     public bool EnableImages { get; set; } = true;
     public bool EnableVideo { get; set; }
     public bool EnableAudio { get; set; }
     public bool EnableDocuments { get; set; }
-    public int Concurrency { get; set; } = 4;
+    public int Concurrency { get; set; } = 8;
     public int ProbeSeconds { get; set; } = 10;
-    public int ToolTimeoutSeconds { get; set; } = 60;
+    public int ToolTimeoutSeconds { get; set; } = 15;
     public int MaxRuntimeSeconds { get; set; } = 60;
     public int MaxMatchedFiles { get; set; } = 10000;
     public int MaxMatchedMb { get; set; } = 10240;

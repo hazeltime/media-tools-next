@@ -49,7 +49,8 @@ dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --concurrency <
 ```
 
 Without `--live`, no files are copied.
-If `--concurrency` is omitted, the CLI uses the hardware-tuned recommendation. Values are clamped to the 1-32 range.
+If `--concurrency` is omitted, the CLI uses 8 workers. Explicit values are clamped to the 1-32 range.
+If `--profile` is omitted, the CLI uses `deep-images`, which performs the in-depth image check. The external tool timeout defaults to 15 seconds unless overridden.
 
 ## Desktop
 

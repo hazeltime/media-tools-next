@@ -6,7 +6,7 @@ namespace MediaToolsNext.Tests;
 public class ScannerPipelineFlowTests
 {
     [Fact]
-    public async Task ForceRescanBypassesReusablePreviousResults()
+    public async Task ForceRescanStillValidatesCandidate()
     {
         var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
         Directory.CreateDirectory(root);
@@ -28,13 +28,13 @@ public class ScannerPipelineFlowTests
             await pipeline.RunAsync(options, null, CancellationToken.None);
             await pipeline.RunAsync(options with { ForceRescan = true }, null, CancellationToken.None);
 
-            Assert.Equal(2, validator.Calls);
+            Assert.Equal(3, validator.Calls);
         }
         finally { Directory.Delete(root, true); }
     }
 
     [Fact]
-    public async Task ReusedValidationKeepsOriginalStatusInsteadOfSkipped()
+    public async Task RepeatedRunsAlwaysProduceFreshValidationResults()
     {
         var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
         Directory.CreateDirectory(root);
@@ -58,8 +58,8 @@ public class ScannerPipelineFlowTests
             Assert.Equal(1, second.Valid);
             Assert.Equal(0, second.Skipped);
             Assert.Equal(ValidationStatus.Valid, results[0].Status);
-            Assert.Equal("cached", results[0].Action);
-            Assert.Equal("cache_reused_previous_validation", results[0].Detail);
+            Assert.Equal("dry-run", results[0].Action);
+            Assert.Null(results[0].Detail);
         }
         finally { Directory.Delete(root, true); }
     }

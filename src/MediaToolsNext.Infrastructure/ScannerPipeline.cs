@@ -93,24 +93,6 @@ public sealed class ScannerPipeline(
 
     private async Task<ScanResultRecord> ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
     {
-        if (!IsAccessDeniedStub(candidate))
-        {
-            var reusable = options.ForceRescan ? null : await store.FindReusableResultAsync(candidate, cancellationToken);
-            if (reusable is not null)
-            {
-                // FIX: use the exact detail string the test and callers expect:
-                // "cache_reused_previous_validation" so cached results are
-                // clearly distinguishable in reports and assertions.
-                var cached = new ScanResultRecord(
-                    sessionId, candidate,
-                    reusable.Status, reusable.Validator,
-                    "cache_reused_previous_validation",
-                    "cached", null, null,
-                    DateTimeOffset.UtcNow);
-                return cached;
-            }
-        }
-
         var validator = validators.GetValidator(candidate.Category);
         var outcome = validator is not null
             ? await ValidateWithRetryAsync(validator, candidate, options, cancellationToken)

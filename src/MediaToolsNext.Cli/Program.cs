@@ -29,7 +29,7 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
 var source     = args[0];
 var target     = args[1];
 var backup     = ValueAfter("--backup");
-var profile    = ScanProfiles.Get(ValueAfter("--profile"));
+var profile    = ScanProfiles.Get(ValueAfter("--profile") ?? ScanProfiles.DeepImages.Name);
 var exportPath = ValueAfter("--export");
 var db         = ValueAfter("--db")
     ?? Path.Combine(
@@ -45,7 +45,7 @@ var tuning = new HardwareTuner();
         var recommendedProbeSeconds = hardwareProfile.RecommendedProbeSeconds;
 var concurrency = int.TryParse(ValueAfter("--concurrency"), out var parsed)
     ? Math.Clamp(parsed, 1, 32)
-    : recommendedConcurrency;
+    : 8;
 var mode        = args.Contains("--live")
     ? (backup is null ? ScanActionMode.CopySorted : ScanActionMode.CopySortedAndBackup)
     : profile.DefaultActionMode;
@@ -85,7 +85,7 @@ var options = new ScanOptions(
     MaxScannedBytes:         MbAfter("--max-scanned-mb"),
     MinMatchedBytes:         MbAfter("--min-matched-mb"),
     MaxMatchedBytes:         MbAfter("--max-matched-mb"),
-    ExternalToolTimeoutSeconds: IntAfter("--tool-timeout-seconds") ?? 20);
+    ExternalToolTimeoutSeconds: IntAfter("--tool-timeout-seconds") ?? 15);
 
 // -----------------------------------------------------------------------
 // Preview mode

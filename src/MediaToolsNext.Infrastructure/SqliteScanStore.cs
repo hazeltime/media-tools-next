@@ -135,26 +135,6 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task<ScanResultRecord?> FindReusableResultAsync(FileCandidate candidate, CancellationToken cancellationToken)
-    {
-        await using var connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        await ConfigureConnectionAsync(connection, cancellationToken);
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT * FROM results
-            WHERE full_path = $full AND size_bytes = $size AND last_write_utc = $lastWrite
-              AND status IN ('Valid','Corrupt','Unknown')
-            ORDER BY timestamp_utc DESC
-            LIMIT 1
-            """;
-        command.Parameters.AddWithValue("$full", candidate.FullPath);
-        command.Parameters.AddWithValue("$size", candidate.SizeBytes);
-        command.Parameters.AddWithValue("$lastWrite", candidate.LastWriteTimeUtc.ToString(TimestampFormat));
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken) ? ReadResult(reader) : null;
-    }
-
     public async Task<IReadOnlyList<ScanResultRecord>> ListResultsAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var results = new List<ScanResultRecord>();

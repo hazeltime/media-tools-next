@@ -27,7 +27,7 @@ public class SqliteStoreTests
     }
 
     [Fact]
-    public async Task FindsReusableUnchangedResult()
+    public async Task StoresPriorResultsForHistoryOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
         Directory.CreateDirectory(root);
@@ -40,11 +40,10 @@ public class SqliteStoreTests
             var session = await store.CreateSessionAsync(options, CancellationToken.None);
             var candidate = new FileCandidate(Path.Combine(root, "a.txt"), "a.txt", ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
             await store.SaveResultAsync(new ScanResultRecord(session, candidate, ValidationStatus.Valid, "test", null, "dry-run", null, null, DateTimeOffset.UtcNow), CancellationToken.None);
+            var results = await store.ListResultsAsync(session, CancellationToken.None);
 
-            var reusable = await store.FindReusableResultAsync(candidate, CancellationToken.None);
-
-            Assert.NotNull(reusable);
-            Assert.Equal(ValidationStatus.Valid, reusable.Status);
+            Assert.Single(results);
+            Assert.Equal(ValidationStatus.Valid, results[0].Status);
         }
         finally { Directory.Delete(root, true); }
     }
