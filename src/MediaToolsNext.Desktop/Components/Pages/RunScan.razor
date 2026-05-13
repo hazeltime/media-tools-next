@@ -27,9 +27,16 @@
         <span>@RunDetail</span>
     </section>
 
+    <%-- P1 fix: "Start scan" is the primary CTA; "Run preview" is secondary --%>
     <section class="action-bar">
-        <button class="btn-primary" disabled="@(State.IsBusy || Errors.Any())" @onclick="PreviewAsync">@(State.IsPreviewing ? "Previewing…" : "Run preview")</button>
-        <button class="btn-primary" disabled="@(State.IsBusy || Errors.Any())" @onclick="RunAsync">@(State.IsScanning ? "Scanning…" : "Start scan")</button>
+        <button class="secondary" disabled="@(State.IsBusy || Errors.Any())" @onclick="PreviewAsync"
+                title="@(Errors.Any() ? "Fix preflight errors before previewing" : "Discover matching files without writing anything")">
+            @(State.IsPreviewing ? "Previewing…" : "Run preview")
+        </button>
+        <button class="btn-primary" disabled="@(State.IsBusy || Errors.Any())" @onclick="RunAsync"
+                title="@(Errors.Any() ? "Fix preflight errors before scanning" : "Validate and process matching files")">
+            @(State.IsScanning ? "Scanning…" : "Start scan")
+        </button>
         @if (State.IsScanning)
         {
             <button class="secondary" disabled="@ScanControl.IsPaused" @onclick="Pause">Pause</button>
@@ -219,18 +226,13 @@
         return new Progress<ScanResultRecord>(r => _pending.Enqueue(r));
     }
 
-    /// <summary>
-    /// Discovery events are fire-and-forget Interlocked increments — no UI
-    /// marshal needed, ScanWorkflowState's methods are already thread-safe.
-    /// The clock timer at 1 s cadence picks up the updated values.
-    /// </summary>
     private IProgress<ScanDiscoveryEvent> BuildDiscoveryProgress() =>
         new Progress<ScanDiscoveryEvent>(e =>
         {
             switch (e.Type)
             {
-                case DiscoveryEventType.Searched:         State.IncrementSearched();          break;
-                case DiscoveryEventType.FilteredOutSize:  State.IncrementFilteredOutSize();   break;
+                case DiscoveryEventType.Searched:           State.IncrementSearched();          break;
+                case DiscoveryEventType.FilteredOutSize:    State.IncrementFilteredOutSize();   break;
                 case DiscoveryEventType.FilteredOutPattern: State.IncrementFilteredOutPattern(); break;
                 case DiscoveryEventType.FilteredOutFamily:  State.IncrementFilteredOutFamily();  break;
             }
