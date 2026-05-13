@@ -5,7 +5,7 @@
 
 <div class="configure-page">
 
-    <!-- ═══ SECTION: Folders & Mode ══════════════════════════════════════════ -->
+    <!-- ═══ SECTION: Folders & Mode ════════════════════════════════════════════════════ -->
     <section class="cfg-section">
         <div class="cfg-section-head">
             <span class="cfg-step">1</span>
@@ -69,24 +69,29 @@
                 </label>
             }
 
-            <div class="cfg-subsection">
-                <h3>Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
-                <div class="form-grid three">
-                    <label>Max scan seconds   <input type="number" min="0" @bind="State.MaxRuntimeSeconds" /></label>
-                    <label>@(State.IsImageOnly ? "Max image files" : "Max matched files")  <input type="number" min="0" @bind="State.MaxMatchedFiles" /></label>
-                    <label>@(State.IsImageOnly ? "Max total image MB" : "Max total matched MB") <input type="number" min="0" @bind="State.MaxMatchedMb" /></label>
+            <%-- P4 fix: Hard limits are rarely changed — collapse by default --%>
+            <details class="cfg-subsection">
+                <summary class="cfg-subsection-summary">
+                    <h3 style="display:inline">Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
+                </summary>
+                <div style="margin-top:8px">
+                    <div class="form-grid three">
+                        <label>Max scan seconds   <input type="number" min="0" @bind="State.MaxRuntimeSeconds" /></label>
+                        <label>@(State.IsImageOnly ? "Max image files" : "Max matched files")  <input type="number" min="0" @bind="State.MaxMatchedFiles" /></label>
+                        <label>@(State.IsImageOnly ? "Max total image MB" : "Max total matched MB") <input type="number" min="0" @bind="State.MaxMatchedMb" /></label>
+                    </div>
+                    <div class="button-row" style="margin-top:10px">
+                        <button @onclick="Defaults">Default limits</button>
+                        <button class="secondary" @onclick="Clear">Unlimited (set all to 0)</button>
+                    </div>
                 </div>
-                <div class="button-row" style="margin-top:10px">
-                    <button @onclick="Defaults">Default limits</button>
-                    <button class="secondary" @onclick="Clear">Unlimited (set all to 0)</button>
-                </div>
-            </div>
+            </details>
         </div>
     </section>
 
     <div class="cfg-divider"></div>
 
-    <!-- ═══ SECTION: Media & Filters ════════════════════════════════════════ -->
+    <!-- ═══ SECTION: Media & Filters ════════════════════════════════════════════════ -->
     <section class="cfg-section">
         <div class="cfg-section-head">
             <span class="cfg-step">2</span>
@@ -127,33 +132,37 @@
                 }
             </div>
 
-            <div class="cfg-subsection">
-                <h3>Custom image types &amp; include filters</h3>
-                <div class="form-grid two">
-                    <label>
-                        Extra image extensions
-                        <small>Accepts jpg, .jpg, or *.jpg — space-separated.</small>
-                        <textarea rows="3" @bind="State.CustomImageExtensionsText" />
-                    </label>
-                    <label>
-                        Custom image filename regex
-                        <small class="@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "" : "regex-invalid")">
-                            @(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "⚠ Regex is invalid.")
-                        </small>
-                        <input @bind="State.CustomImageRegex" />
-                    </label>
-                    <label>
-                        Include filename wildcards
-                        <small>Example: IMG_* *.jpg</small>
-                        <textarea rows="3" @bind="State.IncludePatternsText" />
-                    </label>
-                    <label>
-                        Exclude filename wildcards
-                        <small>Example: thumb_* *_small.*</small>
-                        <textarea rows="3" @bind="State.ExcludePatternsText" />
-                    </label>
+            <%-- P4 fix: custom image section only relevant when images are enabled --%>
+            @if (State.EnableImages)
+            {
+                <div class="cfg-subsection">
+                    <h3>Custom image types &amp; include filters</h3>
+                    <div class="form-grid two">
+                        <label>
+                            Extra image extensions
+                            <small>Accepts jpg, .jpg, or *.jpg — space-separated.</small>
+                            <textarea rows="3" @bind="State.CustomImageExtensionsText" />
+                        </label>
+                        <label>
+                            Custom image filename regex
+                            <small class="@(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "" : "regex-invalid")">
+                                @(ScanWorkflowState.IsRegexValid(State.CustomImageRegex) ? "Regex is valid or empty." : "⚠ Regex is invalid.")
+                            </small>
+                            <input @bind="State.CustomImageRegex" />
+                        </label>
+                        <label>
+                            Include filename wildcards
+                            <small>Example: IMG_* *.jpg</small>
+                            <textarea rows="3" @bind="State.IncludePatternsText" />
+                        </label>
+                        <label>
+                            Exclude filename wildcards
+                            <small>Example: thumb_* *_small.*</small>
+                            <textarea rows="3" @bind="State.ExcludePatternsText" />
+                        </label>
+                    </div>
                 </div>
-            </div>
+            }
 
             <div class="form-grid two">
                 <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
@@ -164,7 +173,7 @@
 
     <div class="cfg-divider"></div>
 
-    <!-- ═══ SECTION: Validation ══════════════════════════════════════════════ -->
+    <!-- ═══ SECTION: Validation ══════════════════════════════════════════════════════ -->
     <section class="cfg-section">
         <div class="cfg-section-head">
             <span class="cfg-step">3</span>
@@ -218,7 +227,7 @@
 
     <div class="cfg-divider"></div>
 
-    <!-- ═══ SECTION: Output ══════════════════════════════════════════════════ -->
+    <!-- ═══ SECTION: Output ════════════════════════════════════════════════════════════ -->
     <section class="cfg-section">
         <div class="cfg-section-head">
             <span class="cfg-step">4</span>

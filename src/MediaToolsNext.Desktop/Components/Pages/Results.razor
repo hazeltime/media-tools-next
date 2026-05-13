@@ -12,6 +12,9 @@
         <p>Structured scan results. Use filters and tabs to focus on what matters.</p>
     </header>
 
+    <%-- P2 fix: show State.Message on this page (was only on RunScan) --%>
+    @if (!string.IsNullOrWhiteSpace(State.Message)) { <div class="notice">@State.Message</div> }
+
     <!-- Scan metadata -->
     <section class="panel run-facts">
         <h2>Scan status</h2>
@@ -78,7 +81,6 @@
         <section class="panel">
             <h2>@TabTitle</h2>
             <p class="muted">@TabDescription</p>
-            <!-- These counters come from the discoverer; no per-file records exist for filtered-out files. -->
             <div class="summary-grid">
                 <div><strong>@FilteredCount.ToString("N0")</strong><span>@TabTitle</span></div>
             </div>
@@ -99,7 +101,11 @@
                     <option value="time">Scan order</option>
                 </select>
             </label>
-            <button disabled="@(!State.Results.Any())" @onclick="ExportAsync">Export @State.ReportFormat.ToUpperInvariant()</button>
+            <%-- P2 fix: describe what will be exported before the user clicks --%>
+            <button class="secondary" disabled="@(!State.Results.Any())" @onclick="ExportAsync"
+                    title="Export @State.Results.Count.ToString("N0") results as @State.ReportFormat.ToUpperInvariant()">
+                Export @State.ReportFormat.ToUpperInvariant()
+            </button>
         </section>
 
         <!-- Context actions per tab -->
@@ -247,7 +253,6 @@
 
     private void RebuildCache()
     {
-        // For filter-only tabs there's no per-row data; skip table rebuild.
         if (ActiveTab is "searched" or "filtered-size" or "filtered-pattern" or "filtered-family")
         {
             _filteredCount = 0;
@@ -287,7 +292,6 @@
         _visibleRows   = filtered.Take(500).ToList();
     }
 
-    // ── Clipboard helpers ────────────────────────────────────────────────────
     private Task CopyCorruptPaths()  => CopyPathsForStatus(ValidationStatus.Corrupt);
     private Task CopyValidPaths()    => CopyPathsForStatus(ValidationStatus.Valid);
     private Task CopyUnknownPaths()  => CopyPathsForStatus(ValidationStatus.Unknown);
@@ -308,18 +312,22 @@
         State.NotifyChanged();
     }
 
-    // ── Folder open helpers ───────────────────────────────────────────────
-    private void OpenValidFolder()   => OpenFolder(Path.Combine(State.TargetRoot, "valid"));
-    private void OpenCorruptFolder() => OpenFolder(Path.Combine(State.TargetRoot, "corrupt"));
+    private void OpenValidFolder()   => OpenFolder(Path.Combine(State.TargetRoot, "valid"),   "Valid");
+    private void OpenCorruptFolder() => OpenFolder(Path.Combine(State.TargetRoot, "corrupt"), "Corrupt");
 
-    private static void OpenFolder(string path)
+    // P2 fix: no longer silently ignores missing folder — sets an actionable message
+    private void OpenFolder(string path, string label)
     {
-        if (!Directory.Exists(path)) return;
+        if (!Directory.Exists(path))
+        {
+            State.Message = $"{label} output folder not found: {path}. Run a copy-mode scan first.";
+            State.NotifyChanged();
+            return;
+        }
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true }); }
-        catch { /* ignore */ }
+        catch (Exception ex) { State.Message = $"Could not open folder: {ex.Message}"; State.NotifyChanged(); }
     }
 
-    // ── Export helpers ────────────────────────────────────────────────────
     private async Task ExportAsync() => await ExportFilteredAsync(null);
 
     private async Task ExportFilteredAsync(ValidationStatus? status)
