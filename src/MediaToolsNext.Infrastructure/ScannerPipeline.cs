@@ -13,7 +13,11 @@ public sealed class ScannerPipeline(
     private static bool IsAccessDeniedStub(FileCandidate c) =>
         c.SizeBytes == 0 && c.LastWriteTimeUtc == DateTimeOffset.MinValue;
 
-    public async Task<ScanSummary> RunAsync(ScanOptions options, IProgress<ScanResultRecord>? progress, CancellationToken cancellationToken)
+    public async Task<ScanSummary> RunAsync(
+        ScanOptions options,
+        IProgress<ScanResultRecord>? progress,
+        CancellationToken cancellationToken,
+        IProgress<ScanDiscoveryEvent>? discoveryProgress = null)
     {
         using var runtimeCts = CreateRuntimeCancellation(options, cancellationToken);
         var runToken = runtimeCts?.Token ?? cancellationToken;
@@ -32,7 +36,7 @@ public sealed class ScannerPipeline(
         {
             try
             {
-                await foreach (var candidate in discoverer.DiscoverAsync(options, runToken))
+                await foreach (var candidate in discoverer.DiscoverAsync(options, runToken, discoveryProgress))
                     await channel.Writer.WriteAsync(candidate, runToken);
                 channel.Writer.TryComplete();
             }
