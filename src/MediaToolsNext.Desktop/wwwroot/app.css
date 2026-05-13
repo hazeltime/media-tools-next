@@ -282,16 +282,22 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 /* ═══════════════════════════════════════════════════════════════════════════
    Run page
    ══════════════════════════════════════════════════════════════════════════ */
+
+/* FIX 1: run-status — elevation via background fill, not colored left border.
+   Active state uses accent-bg tint + accent border on all sides for clear
+   signal without the template-style painted left edge. */
 .run-status {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
-    border-left: 5px solid var(--c-disabled);
     border-radius: var(--radius-md);
     display: grid;
     gap: var(--gap-xs);
     padding: 12px 14px;
 }
-.run-status.active { background: #ecfeff; border-left-color: var(--c-accent); }
+.run-status.active {
+    background: var(--c-accent-bg);
+    border-color: var(--c-accent);
+}
 .run-status span, .result-count span { color: var(--c-muted); font-size: 13px; }
 .run-facts .info-grid div { min-height: 68px; }
 
@@ -317,28 +323,41 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 .live-count.error   { background: #ffe4e6; color: #9f1239; }
 .live-count.skipped { background: #e6edf2; color: var(--c-secondary); }
 .live-count.perf    { background: #eff6ff; color: #1d4ed8; }
+.live-counts-group-label { color: var(--c-muted); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Results table
    ══════════════════════════════════════════════════════════════════════════ */
+
+/* FIX 2: result-toolbar — fluid column widths instead of hard-coded px values.
+   Search field expands to fill available space; sort and export button
+   size naturally. Collapses to single column below 768px (was 960px, which
+   caused a broken mid-width state between 768–960px). */
 .result-toolbar {
     align-items: end;
     display: grid;
     gap: var(--gap-md);
-    grid-template-columns: 180px minmax(240px, 1fr) 210px auto;
+    grid-template-columns: minmax(140px, 0.6fr) minmax(200px, 1fr) minmax(180px, 0.7fr) auto;
 }
+
+/* FIX 3: results-panel — padding-bottom so the last table row is never
+   clipped by the container edge; result-count sticky header gets a bottom
+   border so it visually separates from scrolling content. */
 .results-panel {
     display: grid;
     gap: var(--gap-sm);
     max-height: calc(100vh - 330px);
     min-height: 320px;
     overflow: auto;
+    padding-bottom: var(--gap-lg);
 }
 .result-count {
     align-items: baseline;
     background: var(--c-surface);
+    border-bottom: 1px solid var(--c-border-soft);
     display: flex;
     gap: var(--gap-sm);
+    padding-bottom: var(--gap-xs);
     position: sticky;
     top: 0;
     z-index: 2;
@@ -372,6 +391,36 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
 .status-pill.unknown                       { background: #fef3c7; color: #92400e; }
 .status-pill.skipped                       { background: #e6edf2; color: var(--c-secondary); }
 .empty-cell { color: var(--c-muted); padding: 28px; text-align: center; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Summary tiles (Results page)
+   ══════════════════════════════════════════════════════════════════════════ */
+.summary-tiles { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.summary-tile-group { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); }
+.summary-tile-group-label {
+    color: var(--c-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    min-width: 52px;
+    text-transform: uppercase;
+}
+.summary-tile {
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: grid;
+    gap: 2px;
+    min-width: 88px;
+    padding: 8px 12px;
+    text-align: center;
+    transition: border-color 120ms, background 120ms;
+}
+.summary-tile strong { font-size: 18px; font-weight: 900; line-height: 1.1; }
+.summary-tile span   { color: var(--c-muted); font-size: 11px; font-weight: 600; }
+.summary-tile:hover  { border-color: var(--c-accent); }
+.summary-tile.active { background: var(--c-accent-bg); border-color: var(--c-accent); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Help page
@@ -436,10 +485,15 @@ a, .btn-link { color: #006bb7; }
     .cfg-folders,
     .info-grid          { grid-template-columns: 1fr; }
     .cfg-body           { padding-left: 0; }
-    .result-toolbar     { grid-template-columns: 1fr; }
     .input-action       { grid-template-columns: 1fr; }
     .live-counts        { gap: var(--gap-xs); }
     .live-count         { min-width: 64px; padding: 8px 10px; }
     .live-count-value   { font-size: 17px; }
     .page-stack         { max-width: none; }
+}
+
+/* result-toolbar collapses at a tighter breakpoint (768px) so it doesn't
+   hit a broken mid-width state between 768–960px. */
+@media (max-width: 768px) {
+    .result-toolbar { grid-template-columns: 1fr; }
 }
