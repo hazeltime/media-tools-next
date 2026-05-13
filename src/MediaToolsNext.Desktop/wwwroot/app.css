@@ -156,20 +156,27 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 .cfg-divider {
     border: none;
     border-top: 1px solid var(--c-border-soft);
-    margin: var(--gap-xl) 0;
+    margin: 14px 0;
 }
 
 /* A numbered section = step-badge + header column + body */
 .cfg-section {
     display: grid;
-    gap: var(--gap-lg);
+    gap: var(--gap-md);
+}
+
+@media (min-width: 1200px) {
+    .cfg-section {
+        align-items: start;
+        grid-template-columns: 260px minmax(0, 1fr);
+    }
 }
 
 /* Section heading row: step badge + title/description */
 .cfg-section-head {
     align-items: flex-start;
     display: flex;
-    gap: var(--gap-md);
+    gap: var(--gap-sm);
 }
 
 .cfg-step {
@@ -181,30 +188,37 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
     flex-shrink: 0;
     font-size: 13px;
     font-weight: 800;
-    height: 28px;
+    height: 26px;
     justify-content: center;
-    width: 28px;
+    width: 26px;
 }
 
 .cfg-section-head h2 {
-    font-size: 18px;
+    font-size: 17px;
     margin: 0 0 2px;
 }
 
 /* Body area of a section */
 .cfg-body {
     display: grid;
-    gap: var(--gap-lg);
-    padding-left: 40px; /* aligns with text after the step badge */
+    gap: var(--gap-md);
+    padding-left: 0;
 }
 
 /* Sub-heading within a section body */
-.cfg-subsection { display: grid; gap: var(--gap-sm); }
+.cfg-subsection {
+    background: rgba(255,255,255,.38);
+    border: 1px solid var(--c-border-soft);
+    border-radius: var(--radius-md);
+    display: grid;
+    gap: var(--gap-sm);
+    padding: 10px;
+}
 .cfg-subsection h3 {
     align-items: baseline;
     color: var(--c-text);
     display: flex;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     gap: var(--gap-sm);
     margin: 0;
@@ -218,7 +232,7 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 /* Folder path rows: auto-expand to 1–3 inputs */
 .cfg-folders {
     display: grid;
-    gap: var(--gap-md);
+    gap: var(--gap-sm);
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
@@ -239,7 +253,7 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
    ══════════════════════════════════════════════════════════════════════════ */
 .form-grid, .card-grid, .info-grid, .summary-grid, .preflight-list, .session-list, .tool-row {
     display: grid;
-    gap: var(--gap-md);
+    gap: var(--gap-sm);
 }
 .form-grid.two    { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
 .form-grid.three,
@@ -267,14 +281,15 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
     cursor: pointer;
     display: grid;
     gap: var(--gap-xs);
-    min-height: 88px;
-    padding: 12px;
+    min-height: 64px;
+    padding: 10px;
     text-align: left;
     transition: border-color 120ms, background 120ms;
 }
 .select-card:hover { border-color: var(--c-accent); }
 .select-card.active { background: var(--c-accent-bg); border-color: var(--c-accent); }
 .select-card span { color: var(--c-muted); font-size: 12px; }
+.select-card small { color: var(--c-muted); font-size: 11px; }
 
 /* Display-only stat tiles — no hover affordance */
 .info-grid div, .summary-grid div {
@@ -352,6 +367,37 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
     font-size: 12px;
     font-weight: 700;
     padding: 3px 8px;
+}
+
+.configure-page input,
+.configure-page select {
+    padding: 5px 8px;
+}
+
+.configure-page textarea {
+    min-height: 52px;
+    padding: 6px 8px;
+    resize: vertical;
+}
+
+.configure-page label {
+    gap: 3px;
+}
+
+.configure-page small {
+    line-height: 1.25;
+}
+
+.configure-page .card-grid.three {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.configure-page .form-grid.four {
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.configure-page .extension-cloud {
+    margin-top: 0;
 }
 .tool.ok      { background: #d1fae5; color: #065f46; }
 .tool.missing { background: #fee2e2; color: #991b1b; }
