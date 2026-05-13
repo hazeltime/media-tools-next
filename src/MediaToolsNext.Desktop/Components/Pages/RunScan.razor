@@ -219,6 +219,23 @@
         return new Progress<ScanResultRecord>(r => _pending.Enqueue(r));
     }
 
+    /// <summary>
+    /// Discovery events are fire-and-forget Interlocked increments — no UI
+    /// marshal needed, ScanWorkflowState's methods are already thread-safe.
+    /// The clock timer at 1 s cadence picks up the updated values.
+    /// </summary>
+    private IProgress<ScanDiscoveryEvent> BuildDiscoveryProgress() =>
+        new Progress<ScanDiscoveryEvent>(e =>
+        {
+            switch (e.Type)
+            {
+                case DiscoveryEventType.Searched:         State.IncrementSearched();          break;
+                case DiscoveryEventType.FilteredOutSize:  State.IncrementFilteredOutSize();   break;
+                case DiscoveryEventType.FilteredOutPattern: State.IncrementFilteredOutPattern(); break;
+                case DiscoveryEventType.FilteredOutFamily:  State.IncrementFilteredOutFamily();  break;
+            }
+        });
+
     private void FlushPending(ScanPerformanceTracker tracker)
     {
         _throttleTimer?.Dispose();
@@ -254,12 +271,13 @@
     {
         if (Errors.Any()) { State.Message = "Scan blocked: " + Errors[0]; State.NotifyChanged(); return; }
         if (!State.TryStartScan()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
-        var limit   = new ScanLimitState();
-        var tracker = new ScanPerformanceTracker();
+        var limit    = new ScanLimitState();
+        var tracker  = new ScanPerformanceTracker();
         var progress = BuildThrottledProgress(tracker);
+        var discoveryProgress = BuildDiscoveryProgress();
         try
         {
-            State.Summary = await Pipeline.RunAsync(State.BuildOptions(limit), progress, State.ScanCancellationToken);
+            State.Summary = await Pipeline.RunAsync(State.BuildOptions(limit), progress, State.ScanCancellationToken, discoveryProgress);
             State.LastCompletionReason = State.Summary.CompletionReason;
             FlushPending(tracker);
             State.FinishScan("Scan complete.");
