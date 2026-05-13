@@ -1,0 +1,70 @@
+@page "/tools"
+@inject IExternalToolProbe ToolProbe
+@inject ToolInstallService Installer
+
+<div class="page-stack">
+    <header class="page-header">
+        <p class="eyebrow">System</p>
+        <h1>Tools</h1>
+        <p>Check external validators and install missing tools with Chocolatey or winget.</p>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(_message)) { <div class="notice">@_message</div> }
+
+    <section class="panel">
+        <h2>Validator tools</h2>
+        <div class="tool-status-grid">
+            @foreach (var tool in ToolProbe.GetStatuses())
+            {
+                <div class="tool-status-card @(tool.IsAvailable ? "ok" : "missing")">
+                    <div>
+                        <strong>@tool.Name</strong>
+                        <span>@(tool.IsAvailable ? "Available" : "Missing")</span>
+                    </div>
+                    <p>@(tool.Version ?? tool.Detail ?? "Version unavailable")</p>
+                    <small title="@tool.Path">@((tool.Path ?? "Not found on PATH"))</small>
+                    <button class="secondary" disabled="@(_installing is not null)" @onclick="() => InstallAsync(tool.Name)">
+                        @ButtonText(tool.Name)
+                    </button>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Install behavior</h2>
+        <p class="muted">Install runs in the background with `choco install -y --no-progress` first. If Chocolatey is unavailable or fails, the app tries `winget install --silent` with package agreements accepted. Some installs may still require administrator permission or PATH refresh before the app sees the tool.</p>
+    </section>
+</div>
+
+@code {
+    private string? _installing;
+    private string? _message;
+
+    private string ButtonText(string toolName)
+    {
+        if (_installing == toolName) return "Installing...";
+        if (toolName == "ffprobe") return "Install ffmpeg";
+        return "Install";
+    }
+
+    private async Task InstallAsync(string toolName)
+    {
+        _installing = toolName;
+        _message = $"Installing {toolName}...";
+        try
+        {
+            var result = await Installer.InstallAsync(toolName, CancellationToken.None);
+            _message = result.Success
+                ? $"Install command completed: {result.Command}. Restart the app or refresh PATH if the tool still appears missing."
+                : $"Install failed: {result.Command}. {TrimOutput(result.Output)}";
+        }
+        finally
+        {
+            _installing = null;
+        }
+    }
+
+    private static string TrimOutput(string output) =>
+        output.Length <= 500 ? output : output[..500] + "...";
+}

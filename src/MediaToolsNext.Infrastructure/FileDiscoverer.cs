@@ -263,12 +263,20 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
     private static MediaCategory GetCategory(string file, string extension, ScanOptions options, Regex? customImageRegex)
     {
-        if (SupportedMedia.GetCategory(extension) is { } category && category != MediaCategory.Unknown)
-            return category;
-        if (options.CustomImageExtensions?.Contains(extension) == true)
+        var normalizedExtension = extension.ToLowerInvariant();
+        if (SupportedMedia.GetCategory(normalizedExtension) is { } category
+            && category != MediaCategory.Unknown)
+        {
+            return IsExtensionEnabled(normalizedExtension, options) ? category : MediaCategory.Unknown;
+        }
+        if (options.CustomImageExtensions?.Contains(normalizedExtension) == true)
             return MediaCategory.Image;
         return customImageRegex?.IsMatch(Path.GetFileName(file)) == true ? MediaCategory.Image : MediaCategory.Unknown;
     }
+
+    private static bool IsExtensionEnabled(string extension, ScanOptions options) =>
+        options.EnabledExtensions is not { Count: > 0 } enabledExtensions
+        || enabledExtensions.Contains(extension);
 
     private static Regex? CreateRegex(string? pattern)
     {

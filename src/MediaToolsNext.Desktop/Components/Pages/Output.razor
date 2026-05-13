@@ -5,14 +5,41 @@
     <header class="page-header">
         <p class="eyebrow">Step 4</p>
         <h1>Output</h1>
-        <p>Choose what to log/export and which outcomes copy modes should separate.</p>
+        <p>Choose what to log/export and how write modes separate files.</p>
     </header>
 
     <section class="panel">
-        <h2>Copy outcomes</h2>
+        <h2>Write behavior</h2>
+        @if (State.Mode != ScanActionMode.DryRun)
+        {
+            <div class="form-grid three">
+                <label>Operation
+                    <select @bind="State.ActionOperation">
+                        <option value="@FileActionOperation.Copy">Copy files</option>
+                        <option value="@FileActionOperation.Move">Move files</option>
+                    </select>
+                </label>
+                <label>Group folders
+                    <select @bind="State.OutputGrouping">
+                        <option value="@OutputGrouping.Status">By outcome</option>
+                        <option value="@OutputGrouping.MediaCategory">By media category</option>
+                    </select>
+                </label>
+                <label>Path layout
+                    <select @bind="State.OutputPathLayout">
+                        <option value="@OutputPathLayout.PreserveRelativePath">Preserve relative paths</option>
+                        <option value="@OutputPathLayout.Flat">Flat destination folders</option>
+                    </select>
+                </label>
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <h2>Write outcomes</h2>
         @if (State.Mode == ScanActionMode.DryRun)
         {
-            <p class="muted">Log only mode — no files are copied. These settings take effect when a copy mode is selected in Setup.</p>
+            <p class="muted">Log only mode - no files are written. These settings take effect when a write mode is selected in Setup.</p>
             <div class="form-grid four choice-disabled">
                 @foreach (var status in Copyable)
                 {
@@ -22,7 +49,7 @@
         }
         else
         {
-            <p class="muted">Copy modes copy only selected outcomes.</p>
+            <p class="muted">Write modes process only selected outcomes.</p>
             <div class="form-grid four">
                 @foreach (var status in Copyable)
                 {

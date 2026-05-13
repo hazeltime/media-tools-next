@@ -18,7 +18,7 @@ var cancellationToken = cts.Token;
 // -----------------------------------------------------------------------
 if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
 {
-    Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [--backup <path>] [--live] [--db <path>] [--concurrency <n>] [--profile <name>]");
+    Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [--backup <path>] [--live] [--move] [--flat] [--group-category] [--db <path>] [--concurrency <n>] [--profile <name>]");
     Console.WriteLine();
     Console.WriteLine("Profiles:");
     foreach (var p in ScanProfiles.All)
@@ -59,6 +59,9 @@ foreach (var tool in tools.GetStatuses())
     Console.WriteLine($"  {tool.Name,-10} {(tool.IsAvailable ? tool.Path : "missing")}");
 
 Console.WriteLine($"Auto tuning: concurrency={concurrency}, probeSeconds={recommendedProbeSeconds}, buffer={hardwareProfile.RecommendedCopyBufferBytes:N0} bytes, {hardwareProfile.Rationale}");
+var operation = args.Contains("--move") ? FileActionOperation.Move : FileActionOperation.Copy;
+var grouping = args.Contains("--group-category") ? OutputGrouping.MediaCategory : OutputGrouping.Status;
+var layout = args.Contains("--flat") ? OutputPathLayout.Flat : OutputPathLayout.PreserveRelativePath;
 
 // -----------------------------------------------------------------------
 // Build options
@@ -85,7 +88,10 @@ var options = new ScanOptions(
     MaxScannedBytes:         MbAfter("--max-scanned-mb"),
     MinMatchedBytes:         MbAfter("--min-matched-mb"),
     MaxMatchedBytes:         MbAfter("--max-matched-mb"),
-    ExternalToolTimeoutSeconds: IntAfter("--tool-timeout-seconds") ?? 15);
+    ExternalToolTimeoutSeconds: IntAfter("--tool-timeout-seconds") ?? 15,
+    ActionOperation: operation,
+    OutputGrouping: grouping,
+    OutputPathLayout: layout);
 
 // -----------------------------------------------------------------------
 // Preview mode

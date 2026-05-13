@@ -104,6 +104,55 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task DiscoverySkipsDeselectedDefaultExtension()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "photo.jpg"), "x");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                EnabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png" }
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Empty(files);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task DiscoveryIncludesSelectedDefaultExtension()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "photo.jpg"), "x");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                EnabledExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg" }
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal(MediaCategory.Image, files[0].Category);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DiscoveryAppliesSizeAndWildcardFilters()
     {
         var root = NewTempDir();
@@ -369,8 +418,62 @@ public class DiscoveryAndActionTests
 
             var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
 
-            Assert.Equal("not-copied-status-filter", action.Action);
+            Assert.Equal("not-written-status-filter", action.Action);
             Assert.False(Directory.Exists(target));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task CopySortedCanWriteFlatCategoryOutput()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                OutputGrouping = OutputGrouping.MediaCategory,
+                OutputPathLayout = OutputPathLayout.Flat
+            };
+
+            var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
+
+            var copied = Path.Combine(target, "document", "a.txt");
+            Assert.Equal("copied", action.Action);
+            Assert.Equal(copied, action.PrimaryTargetPath);
+            Assert.True(File.Exists(copied));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task MoveSortedDeletesSourceAfterTargetWrite()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                ActionOperation = FileActionOperation.Move
+            };
+
+            var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
+
+            Assert.Equal("moved", action.Action);
+            Assert.False(File.Exists(source));
+            Assert.True(File.Exists(Path.Combine(target, "valid", "a.txt")));
         }
         finally { Directory.Delete(root, true); }
     }

@@ -20,5 +20,13 @@ public static class SupportedMedia
 
     public static MediaCategory GetCategory(string extension) =>
         ExtensionToCategory.TryGetValue(extension, out var category) ? category : MediaCategory.Unknown;
-}
 
+    public static IReadOnlyDictionary<string, MediaCategory> Extensions => ExtensionToCategory;
+
+    public static IReadOnlyList<string> GetExtensions(MediaCategory category) =>
+        ExtensionToCategory
+            .Where(pair => pair.Value == category)
+            .Select(pair => pair.Key)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+}

@@ -10,6 +10,9 @@ public sealed class ScanWorkflowState
     public string TargetRoot { get; set; } = @"E:\_output_";
     public string? BackupRoot { get; set; } = @"G:\_backup_";
     public ScanActionMode Mode { get; set; } = ScanActionMode.DryRun;
+    public FileActionOperation ActionOperation { get; set; } = FileActionOperation.Copy;
+    public OutputGrouping OutputGrouping { get; set; } = OutputGrouping.Status;
+    public OutputPathLayout OutputPathLayout { get; set; } = OutputPathLayout.PreserveRelativePath;
     public string ProfileName { get; set; } = ScanProfiles.DeepImages.Name;
     public ValidationDepth ValidationDepth { get; set; } = ValidationDepth.Deep;
     public bool EnableImages { get; set; } = true;
@@ -34,6 +37,7 @@ public sealed class ScanWorkflowState
     public string ReportSort { get; set; } = "status-path";
     public bool GroupReportByStatus { get; set; } = true;
     public HashSet<ValidationStatus> CopyStatuses { get; } = [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
+    public HashSet<string> EnabledDefaultExtensions { get; } = SupportedMedia.Extensions.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
     public List<ScanResultRecord> Results { get; } = [];
     public List<ScanSessionRecord> Sessions { get; } = [];
     public ScanSummary? Summary { get; set; }
@@ -115,6 +119,7 @@ public sealed class ScanWorkflowState
     public bool IsImageOnly => EnableImages && !EnableVideo && !EnableAudio && !EnableDocuments;
     public bool AnyFamilyEnabled => EnableImages || EnableVideo || EnableAudio || EnableDocuments;
     public IReadOnlySet<string> CustomImageExtensions => ParseExtensions(CustomImageExtensionsText);
+    public IReadOnlySet<string> EnabledExtensions => EnabledDefaultExtensions;
     public IReadOnlyList<string> IncludePatterns => ParseList(IncludePatternsText);
     public IReadOnlyList<string> ExcludePatterns => ParseList(ExcludePatternsText);
 
@@ -273,7 +278,10 @@ public sealed class ScanWorkflowState
         var patterns = IncludePatterns.Count > 0 || ExcludePatterns.Count > 0
             ? $", patterns: include {IncludePatterns.Count}, exclude {ExcludePatterns.Count}"
             : string.Empty;
-        return $"{Mode}, {DepthLabel(ValidationDepth)}, {families}; {limits}{sizeFilter}{patterns}; cache {(ForceRescan ? "off" : "on")}.";
+        var writeMode = Mode == ScanActionMode.DryRun
+            ? "log only"
+            : $"{ActionOperation}, {OutputGrouping}, {OutputPathLayout}";
+        return $"{Mode}, {writeMode}, {DepthLabel(ValidationDepth)}, {families}; {limits}{sizeFilter}{patterns}; cache {(ForceRescan ? "off" : "on")}.";
     }
 
     public void ApplyProfile(string name)
@@ -317,7 +325,11 @@ public sealed class ScanWorkflowState
             MaxCandidateBytes: MbAsBytes(MaxFileMb),
             IncludeFileNamePatterns: IncludePatterns,
             ExcludeFileNamePatterns: ExcludePatterns,
-            ActionStatuses: CopyStatuses);
+            ActionStatuses: CopyStatuses,
+            ActionOperation: ActionOperation,
+            OutputGrouping: OutputGrouping,
+            OutputPathLayout: OutputPathLayout,
+            EnabledExtensions: EnabledExtensions);
     }
 
     public IEnumerable<string> PreflightErrors()
@@ -334,12 +346,42 @@ public sealed class ScanWorkflowState
         if (MinFileKb < 0) yield return "Minimum file size cannot be negative.";
         if (MaxFileMb < 0) yield return "Maximum file size cannot be negative.";
         if (MaxFileMb > 0 && MinFileKb > MaxFileMb * 1024) yield return "Minimum file size cannot exceed maximum file size.";
-        if (Mode != ScanActionMode.DryRun && string.IsNullOrWhiteSpace(TargetRoot)) yield return "Target folder is required for copy modes.";
+        if (Mode != ScanActionMode.DryRun && string.IsNullOrWhiteSpace(TargetRoot)) yield return "Target folder is required for write modes.";
         if (Mode != ScanActionMode.DryRun && !string.IsNullOrWhiteSpace(TargetRoot) && !Directory.Exists(TargetRoot)) yield return "Target folder does not exist.";
-        if (Mode != ScanActionMode.DryRun && !ConfirmedLiveMode) yield return "Confirm live copy mode before scanning.";
+        if (Mode != ScanActionMode.DryRun && !ConfirmedLiveMode) yield return "Confirm live write mode before scanning.";
         if (Mode == ScanActionMode.CopySortedAndBackup && string.IsNullOrWhiteSpace(BackupRoot)) yield return "Backup folder is required for backup mode.";
         if (Mode == ScanActionMode.CopySortedAndBackup && !string.IsNullOrWhiteSpace(BackupRoot) && !Directory.Exists(BackupRoot)) yield return "Backup folder does not exist.";
-        if (Mode != ScanActionMode.DryRun && CopyStatuses.Count == 0) yield return "Select at least one outcome to copy.";
+        if (Mode != ScanActionMode.DryRun && CopyStatuses.Count == 0) yield return "Select at least one outcome to write.";
+        if (AnyFamilyEnabled
+            && !EnabledDefaultExtensions.Any(ext => IsEnabled(SupportedMedia.GetCategory(ext)))
+            && CustomImageExtensions.Count == 0)
+        {
+            yield return "Select at least one default extension for an enabled file family, or add a custom image type.";
+        }
+    }
+
+    public bool IsExtensionEnabled(string extension) => EnabledDefaultExtensions.Contains(NormalizeExtension(extension));
+
+    public void ToggleExtension(string extension, bool enabled)
+    {
+        var normalized = NormalizeExtension(extension);
+        if (enabled) EnabledDefaultExtensions.Add(normalized);
+        else EnabledDefaultExtensions.Remove(normalized);
+        NotifyChanged();
+    }
+
+    public void SelectAllExtensions(MediaCategory category)
+    {
+        foreach (var extension in SupportedMedia.GetExtensions(category))
+            EnabledDefaultExtensions.Add(extension);
+        NotifyChanged();
+    }
+
+    public void SelectNoExtensions(MediaCategory category)
+    {
+        foreach (var extension in SupportedMedia.GetExtensions(category))
+            EnabledDefaultExtensions.Remove(extension);
+        NotifyChanged();
     }
 
     public static string DepthLabel(ValidationDepth depth) => depth switch
@@ -384,4 +426,20 @@ public sealed class ScanWorkflowState
     private static long? MbAsBytes(int value) => value <= 0 ? null : value * 1048576L;
     private static long? KbAsBytes(int value) => value <= 0 ? null : value * 1024L;
     private static string FormatLimit(int value, string unit) => value <= 0 ? $"unlimited {unit}" : $"{value:N0} {unit}";
+    private bool IsEnabled(MediaCategory category) => category switch
+    {
+        MediaCategory.Image => EnableImages,
+        MediaCategory.Video => EnableVideo,
+        MediaCategory.Audio => EnableAudio,
+        MediaCategory.Document => EnableDocuments,
+        _ => false
+    };
+
+    private static string NormalizeExtension(string extension)
+    {
+        var value = extension.Trim();
+        if (value.StartsWith("*.", StringComparison.Ordinal)) value = value[1..];
+        if (!value.StartsWith(".", StringComparison.Ordinal)) value = "." + value;
+        return value.ToLowerInvariant();
+    }
 }

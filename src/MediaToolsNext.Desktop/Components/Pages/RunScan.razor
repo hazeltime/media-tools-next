@@ -48,28 +48,48 @@
     @if (State.Results.Any() || State.IsScanning)
     {
         <section class="panel live-counts-panel">
+            <div class="progress-strip">
+                <div class="progress-metric">
+                    <span><strong>Time</strong><em>@Percent(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)</em></span>
+                    <progress max="100" value="@Progress(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)"></progress>
+                </div>
+                <div class="progress-metric">
+                    <span><strong>Matched files</strong><em>@Percent(State.Results.Count, State.MaxMatchedFiles)</em></span>
+                    <progress max="100" value="@Progress(State.Results.Count, State.MaxMatchedFiles)"></progress>
+                </div>
+                <div class="progress-metric">
+                    <span><strong>Matched MB</strong><em>@Percent(State.MatchedMb, State.MaxMatchedMb)</em></span>
+                    <progress max="100" value="@Progress(State.MatchedMb, State.MaxMatchedMb)"></progress>
+                </div>
+            </div>
+
             <!-- Row 1: pipeline input funnel -->
             <p class="live-counts-group-label">Input</p>
             <div class="live-counts">
                 <div class="live-count searched" title="Every file the discoverer touched before any filter.">
                     <span class="live-count-value">@State.TotalSearched.ToString("N0")</span>
                     <span class="live-count-label">Searched</span>
+                    <span class="live-count-percent">@Percent(State.TotalSearched, State.TotalSearched)</span>
                 </div>
                 <div class="live-count filtered" title="Dropped by min/max file size filter.">
                     <span class="live-count-value">@State.FilteredOutSize.ToString("N0")</span>
                     <span class="live-count-label">Filtered · size</span>
+                    <span class="live-count-percent">@Percent(State.FilteredOutSize, State.TotalSearched)</span>
                 </div>
                 <div class="live-count filtered" title="Dropped by include/exclude filename pattern.">
                     <span class="live-count-value">@State.FilteredOutPattern.ToString("N0")</span>
                     <span class="live-count-label">Filtered · pattern</span>
+                    <span class="live-count-percent">@Percent(State.FilteredOutPattern, State.TotalSearched)</span>
                 </div>
                 <div class="live-count filtered" title="Dropped because file family not enabled.">
                     <span class="live-count-value">@State.FilteredOutFamily.ToString("N0")</span>
                     <span class="live-count-label">Filtered · family</span>
+                    <span class="live-count-percent">@Percent(State.FilteredOutFamily, State.TotalSearched)</span>
                 </div>
                 <div class="live-count total" title="Files that passed all discoverer filters and entered the validation pipeline.">
                     <span class="live-count-value">@State.Results.Count.ToString("N0")</span>
                     <span class="live-count-label">Matched</span>
+                    <span class="live-count-percent">@Percent(State.Results.Count, State.TotalSearched)</span>
                 </div>
                 <div class="live-count total" title="Total size of all matched files so far.">
                     <span class="live-count-value">@State.MatchedMb.ToString("N1")</span>
@@ -83,22 +103,27 @@
                 <div class="live-count valid">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Valid).ToString("N0")</span>
                     <span class="live-count-label">Valid</span>
+                    <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Valid), State.Results.Count)</span>
                 </div>
                 <div class="live-count corrupt">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Corrupt).ToString("N0")</span>
                     <span class="live-count-label">Corrupt</span>
+                    <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Corrupt), State.Results.Count)</span>
                 </div>
                 <div class="live-count unknown">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Unknown).ToString("N0")</span>
                     <span class="live-count-label">Unknown</span>
+                    <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Unknown), State.Results.Count)</span>
                 </div>
                 <div class="live-count error">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Error).ToString("N0")</span>
                     <span class="live-count-label">Error</span>
+                    <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Error), State.Results.Count)</span>
                 </div>
                 <div class="live-count skipped" title="Reached pipeline but had no matching validator (category disabled after start, or access-denied stub).">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Skipped).ToString("N0")</span>
                     <span class="live-count-label">Skipped</span>
+                    <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Skipped), State.Results.Count)</span>
                 </div>
                 <div class="live-count perf">
                     <span class="live-count-value">@State.Performance.FilesPerSecond.ToString("N1")</span>
@@ -180,6 +205,8 @@
     private static string FormatElapsed(TimeSpan t) => t.TotalHours >= 1
         ? $"{(int)t.TotalHours}h {t.Minutes:D2}m {t.Seconds:D2}s"
         : $"{t.Minutes:D2}m {t.Seconds:D2}s";
+    private static string Percent(double value, double total) => total <= 0 ? "n/a" : $"{Math.Clamp(value / total, 0, 1):P0}";
+    private static double Progress(double value, double total) => total <= 0 ? 0 : Math.Clamp(value / total * 100d, 0, 100);
 
     protected override void OnInitialized()
     {

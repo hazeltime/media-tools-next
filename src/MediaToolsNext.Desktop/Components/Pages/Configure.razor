@@ -21,10 +21,10 @@
                     <strong>Log only</strong><span>Validate and record results. No target writes.</span>
                 </button>
                 <button class="select-card @(State.Mode == ScanActionMode.CopySorted        ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySorted)">
-                    <strong>Copy sorted</strong><span>Copy selected outcomes to target.</span>
+                    <strong>Write selected</strong><span>Copy or move selected outcomes to target.</span>
                 </button>
                 <button class="select-card @(State.Mode == ScanActionMode.CopySortedAndBackup ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySortedAndBackup)">
-                    <strong>Copy + backup</strong><span>Copy to target and mirror to backup.</span>
+                    <strong>Write + backup</strong><span>Copy or move to target and mirror to backup.</span>
                 </button>
             </div>
 
@@ -40,8 +40,8 @@
                 @if (State.Mode != ScanActionMode.DryRun)
                 {
                     <label>
-                        Target folder
-                        <small>Sorted copies land here, split by outcome.</small>
+                    Target folder
+                        <small>Selected files land here using the output options below.</small>
                         <div class="input-action">
                             <input @bind="State.TargetRoot" />
                             <button @onclick="PickTarget">Browse</button>
@@ -51,8 +51,8 @@
                 @if (State.Mode == ScanActionMode.CopySortedAndBackup)
                 {
                     <label>
-                        Backup folder
-                        <small>Mirror of the sorted target copies.</small>
+                    Backup folder
+                        <small>Mirror of the selected target writes.</small>
                         <div class="input-action">
                             <input @bind="State.BackupRoot" />
                             <button @onclick="PickBackup">Browse</button>
@@ -65,7 +65,7 @@
             {
                 <label class="choice confirm cfg-confirm">
                     <input type="checkbox" @bind="State.ConfirmedLiveMode" />
-                    I understand this mode writes file copies.
+                    I understand this mode writes files and move mode removes originals after a successful write.
                 </label>
             }
 
@@ -126,10 +126,11 @@
                 </div>
                 @if (State.EnableImages)
                 {
-                    <div class="extension-cloud">
-                        @foreach (var ext in ImageExtensions) { <span>@ext</span> }
-                    </div>
+                    @ExtensionSelector(MediaCategory.Image)
                 }
+                @if (State.EnableVideo) { @ExtensionSelector(MediaCategory.Video) }
+                @if (State.EnableAudio) { @ExtensionSelector(MediaCategory.Audio) }
+                @if (State.EnableDocuments) { @ExtensionSelector(MediaCategory.Document) }
             </div>
 
             @if (State.EnableImages)
@@ -201,7 +202,7 @@
                 <div class="tool-row">
                     @foreach (var tool in ToolProbe.GetStatuses())
                     {
-                        <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.IsAvailable ? tool.Path : "Not found on PATH")">@tool.Name</span>
+                        <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.Version ?? tool.Path ?? "Not found on PATH")">@tool.Name</span>
                     }
                 </div>
                 <div class="form-grid three" style="margin-top:12px">
@@ -237,10 +238,37 @@
 
         <div class="cfg-body">
             <div class="cfg-subsection">
-                <h3>Copy outcomes</h3>
+                <h3>Write behavior</h3>
+                @if (State.Mode != ScanActionMode.DryRun)
+                {
+                    <div class="form-grid three">
+                        <label>Operation
+                            <select @bind="State.ActionOperation">
+                                <option value="@FileActionOperation.Copy">Copy files</option>
+                                <option value="@FileActionOperation.Move">Move files</option>
+                            </select>
+                        </label>
+                        <label>Group folders
+                            <select @bind="State.OutputGrouping">
+                                <option value="@OutputGrouping.Status">By outcome</option>
+                                <option value="@OutputGrouping.MediaCategory">By media category</option>
+                            </select>
+                        </label>
+                        <label>Path layout
+                            <select @bind="State.OutputPathLayout">
+                                <option value="@OutputPathLayout.PreserveRelativePath">Preserve relative paths</option>
+                                <option value="@OutputPathLayout.Flat">Flat destination folders</option>
+                            </select>
+                        </label>
+                    </div>
+                }
+            </div>
+
+            <div class="cfg-subsection">
+                <h3>Write outcomes</h3>
                 @if (State.Mode == ScanActionMode.DryRun)
                 {
-                    <p class="muted">Log only mode — no files are copied. Applies when a copy mode is selected above.</p>
+                    <p class="muted">Log only mode - no files are written. Applies when a write mode is selected above.</p>
                     <div class="form-grid four choice-disabled">
                         @foreach (var status in Copyable)
                         {
@@ -250,7 +278,7 @@
                 }
                 else
                 {
-                    <p class="muted">Only selected outcomes are copied.</p>
+                    <p class="muted">Only selected outcomes are written.</p>
                     <div class="form-grid four">
                         @foreach (var status in Copyable)
                         {
@@ -290,7 +318,6 @@
 @code {
     private static readonly ValidationStatus[] Copyable =
         [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
-    private static readonly string[] ImageExtensions = GetImageExtensions();
 
     private async Task PickSource()
     {
@@ -341,16 +368,22 @@
         _                 => profile.Name
     };
 
-    private static string[] GetImageExtensions()
-    {
-        var field = typeof(SupportedMedia).GetField("ExtensionToCategory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        if (field?.GetValue(null) is not System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, MediaCategory>> entries)
-            return [];
-
-        return entries
-            .Where(pair => pair.Value == MediaCategory.Image)
-            .Select(pair => pair.Key)
-            .OrderBy(x => x)
-            .ToArray();
-    }
+    private RenderFragment ExtensionSelector(MediaCategory category) => @<div class="extension-selector">
+        <div class="extension-selector-head">
+            <strong>@category extensions</strong>
+            <span>
+                <button class="secondary compact" @onclick="() => State.SelectAllExtensions(category)">All</button>
+                <button class="secondary compact" @onclick="() => State.SelectNoExtensions(category)">None</button>
+            </span>
+        </div>
+        <div class="extension-grid">
+            @foreach (var ext in SupportedMedia.GetExtensions(category))
+            {
+                <label class="choice extension-choice">
+                    <input type="checkbox" checked="@State.IsExtensionEnabled(ext)" @onchange="e => State.ToggleExtension(ext, (bool)e.Value!)" />
+                    @ext
+                </label>
+            }
+        </div>
+    </div>;
 }

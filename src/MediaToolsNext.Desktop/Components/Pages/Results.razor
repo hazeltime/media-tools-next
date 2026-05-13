@@ -43,22 +43,27 @@
             <button class="summary-tile @(ActiveTab == "searched" ? "active" : "") searched"
                     @onclick='() => SetTab("searched")'>
                 <strong>@State.TotalSearched.ToString("N0")</strong><span>Searched</span>
+                <small>@FormatPercent(State.TotalSearched, State.TotalSearched)</small>
             </button>
             <button class="summary-tile @(ActiveTab == "filtered-size" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-size")'>
                 <strong>@State.FilteredOutSize.ToString("N0")</strong><span>Filtered · size</span>
+                <small>@FormatPercent(State.FilteredOutSize, State.TotalSearched)</small>
             </button>
             <button class="summary-tile @(ActiveTab == "filtered-pattern" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-pattern")'>
                 <strong>@State.FilteredOutPattern.ToString("N0")</strong><span>Filtered · pattern</span>
+                <small>@FormatPercent(State.FilteredOutPattern, State.TotalSearched)</small>
             </button>
             <button class="summary-tile @(ActiveTab == "filtered-family" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-family")'>
                 <strong>@State.FilteredOutFamily.ToString("N0")</strong><span>Filtered · family</span>
+                <small>@FormatPercent(State.FilteredOutFamily, State.TotalSearched)</small>
             </button>
             <button class="summary-tile @(ActiveTab == "all" ? "active" : "") total"
                     @onclick='() => SetTab("all")'>
                 <strong>@State.Results.Count.ToString("N0")</strong><span>Matched</span>
+                <small>@FormatPercent(State.Results.Count, State.TotalSearched)</small>
             </button>
         </div>
         <!-- Outcomes -->
@@ -71,6 +76,7 @@
                         @onclick="() => SetTab(tabKey)">
                     <strong>@State.GetStatusCount(st).ToString("N0")</strong>
                     <span>@st</span>
+                    <small>@FormatPercent(State.GetStatusCount(st), State.Results.Count)</small>
                 </button>
             }
         </div>
@@ -99,7 +105,19 @@
                     <option value="status-path">Status, then path</option>
                     <option value="path">Path</option>
                     <option value="size-desc">Largest first</option>
+                    <option value="detail">Detail</option>
+                    <option value="validator">Validator</option>
                     <option value="time">Scan order</option>
+                    <option value="newest">Newest first</option>
+                </select>
+            </label>
+            <label>Error/detail group
+                <select @bind="_detailGroup" @bind:after="RebuildCache">
+                    <option value="">All details</option>
+                    @foreach (var detail in DetailGroups)
+                    {
+                        <option value="@detail">@detail</option>
+                    }
                 </select>
             </label>
             @* P2 fix: describe what will be exported before the user clicks *@
@@ -172,38 +190,83 @@
                     else { <text>matching rows.</text> }
                 </span>
             </div>
-            <table class="results-table">
+            @if (State.GroupReportByStatus && _visibleRows.Count > 0)
+            {
+                @foreach (var group in _visibleRows.GroupBy(r => r.Status))
+                {
+                    <h3 class="result-group-heading">@group.Key <span>@group.Count().ToString("N0")</span></h3>
+                    @ResultTable(group)
+                }
+            }
+            else
+            {
+                @ResultTable(_visibleRows)
+            }
+        </section>
+    }
+
+    @if (_previewRow is not null)
+    {
+        <div class="preview-overlay" @onclick="ClosePreview" role="dialog" aria-modal="true" aria-label="Image preview">
+            <div class="preview-box" @onclick:stopPropagation>
+                <div class="preview-head">
+                    <strong>@_previewRow.Candidate.RelativePath</strong>
+                    <button class="secondary compact" @onclick="OpenPreviewExternal">Open</button>
+                    <button class="secondary compact" @onclick="ClosePreview">Close</button>
+                </div>
+                @if (_previewDataUri is not null)
+                {
+                    <img src="@_previewDataUri" alt="@_previewRow.Candidate.RelativePath" />
+                }
+                else
+                {
+                    <p class="muted">Preview is unavailable for this file size or type. Use Open to launch it externally.</p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private RenderFragment ResultTable(IEnumerable<ScanResultRecord> rows) => @<table class="results-table">
                 <colgroup><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
                 <thead><tr><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
                 <tbody>
-                    @foreach (var row in _visibleRows)
+                    @foreach (var row in rows)
                     {
                         <tr>
                             <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
                             <td>@row.Candidate.Category</td>
-                            <td title="@row.Candidate.FullPath"><span class="path-cell">@row.Candidate.RelativePath</span></td>
+                            <td title="@row.Candidate.FullPath">
+                                @if (row.Candidate.Category == MediaCategory.Image)
+                                {
+                                    <button class="result-path-button" @onclick="() => PreviewImageAsync(row)">@row.Candidate.RelativePath</button>
+                                }
+                                else
+                                {
+                                    <span class="path-cell">@row.Candidate.RelativePath</span>
+                                }
+                            </td>
                             <td>@FormatBytes(row.Candidate.SizeBytes)</td>
                             <td>@row.Validator</td>
                             <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
                         </tr>
                     }
-                    @if (_visibleRows.Count == 0)
+                    @if (!rows.Any())
                     {
                         <tr><td colspan="6" class="empty-cell">No results match the current filter.</td></tr>
                     }
                 </tbody>
-            </table>
-        </section>
-    }
-</div>
-
-@code {
+            </table>;
     [Parameter] public string? Tab { get; set; }
 
     private string ActiveTab = "all";
     private string _searchText = string.Empty;
+    private string _detailGroup = string.Empty;
     private List<ScanResultRecord> _visibleRows  = [];
     private int                    _filteredCount = 0;
+    private ScanResultRecord? _previewRow;
+    private string? _previewDataUri;
 
     private string TabTitle => ActiveTab switch
     {
@@ -231,6 +294,13 @@
         "filtered-family"  => State.FilteredOutFamily,
         _                  => 0
     };
+    private IReadOnlyList<string> DetailGroups => State.Results
+        .Select(r => NormalizeDetail(r.Detail))
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+        .Take(50)
+        .ToArray();
 
     protected override void OnInitialized()
     {
@@ -280,12 +350,16 @@
             "path"        => State.Results.OrderBy(x => x.Candidate.RelativePath),
             "size-desc"   => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
             "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
+            "detail"      => State.Results.OrderBy(x => NormalizeDetail(x.Detail)).ThenBy(x => x.Candidate.RelativePath),
+            "validator"   => State.Results.OrderBy(x => x.Validator).ThenBy(x => x.Candidate.RelativePath),
+            "newest"      => State.Results.OrderByDescending(x => x.TimestampUtc),
             _             => (IEnumerable<ScanResultRecord>)State.Results
         };
 
         var filtered = sorted.Where(r =>
         {
             if (statusFilter.HasValue && r.Status != statusFilter.Value) return false;
+            if (!string.IsNullOrWhiteSpace(_detailGroup) && !NormalizeDetail(r.Detail).Equals(_detailGroup, StringComparison.OrdinalIgnoreCase)) return false;
             if (string.IsNullOrWhiteSpace(_searchText)) return true;
             return r.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
                 || r.Candidate.FullPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -327,8 +401,61 @@
                 || r.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
         });
 
-    private void OpenValidFolder()   => OpenFolder(Path.Combine(State.TargetRoot, "valid"),   "Valid");
-    private void OpenCorruptFolder() => OpenFolder(Path.Combine(State.TargetRoot, "corrupt"), "Corrupt");
+    private async Task PreviewImageAsync(ScanResultRecord row)
+    {
+        if (!File.Exists(row.Candidate.FullPath))
+        {
+            State.Message = "Image file no longer exists: " + row.Candidate.FullPath;
+            State.NotifyChanged();
+            return;
+        }
+
+        _previewRow = row;
+        _previewDataUri = null;
+        try
+        {
+            if (row.Candidate.SizeBytes <= 10 * 1024 * 1024)
+            {
+                var bytes = await File.ReadAllBytesAsync(row.Candidate.FullPath);
+                _previewDataUri = $"data:{ImageMime(row.Candidate.Extension)};base64,{Convert.ToBase64String(bytes)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            State.Message = "Could not preview image: " + ex.Message;
+            State.NotifyChanged();
+        }
+    }
+
+    private void ClosePreview()
+    {
+        _previewRow = null;
+        _previewDataUri = null;
+    }
+
+    private void OpenPreviewExternal()
+    {
+        if (_previewRow is not null)
+            OpenFile(_previewRow.Candidate.FullPath);
+    }
+
+    private void OpenFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            State.Message = "File not found: " + path;
+            State.NotifyChanged();
+            return;
+        }
+
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true }); }
+        catch (Exception ex) { State.Message = $"Could not open file: {ex.Message}"; State.NotifyChanged(); }
+    }
+
+    private void OpenValidFolder()   => OpenFolder(OutputFolder("valid"),   "Valid");
+    private void OpenCorruptFolder() => OpenFolder(OutputFolder("corrupt"), "Corrupt");
+    private string OutputFolder(string statusFolder) =>
+        State.OutputGrouping == OutputGrouping.Status ? Path.Combine(State.TargetRoot, statusFolder) : State.TargetRoot;
 
     // P2 fix: no longer silently ignores missing folder — sets an actionable message
     private void OpenFolder(string path, string label)
@@ -356,6 +483,9 @@
             "path"        => source.OrderBy(x => x.Candidate.RelativePath),
             "size-desc"   => source.OrderByDescending(x => x.Candidate.SizeBytes),
             "status-path" => source.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
+            "detail"      => source.OrderBy(x => NormalizeDetail(x.Detail)).ThenBy(x => x.Candidate.RelativePath),
+            "validator"   => source.OrderBy(x => x.Validator).ThenBy(x => x.Candidate.RelativePath),
+            "newest"      => source.OrderByDescending(x => x.TimestampUtc),
             _             => source
         };
 
@@ -378,4 +508,16 @@
     }
 
     private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+    private static string FormatPercent(double value, double total) => total <= 0 ? "n/a" : $"{Math.Clamp(value / total, 0, 1):P0}";
+    private static string NormalizeDetail(string? detail) => string.IsNullOrWhiteSpace(detail) ? "No detail" : detail.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "No detail";
+    private static string ImageMime(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" or ".jpe" or ".jfif" => "image/jpeg",
+        ".png" => "image/png",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        ".bmp" or ".dib" => "image/bmp",
+        ".svg" => "image/svg+xml",
+        _ => "application/octet-stream"
+    };
 }

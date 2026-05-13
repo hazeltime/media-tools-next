@@ -10,13 +10,16 @@ public sealed class FileActionService : IFileActionService
             return FileActionOutcome.DryRun();
 
         if (options.ActionStatuses is { Count: > 0 } statuses && !statuses.Contains(outcome.Status))
-            return new FileActionOutcome("not-copied-status-filter", null, null, null);
+            return new FileActionOutcome("not-written-status-filter", null, null, null);
 
-        var statusFolder = outcome.Status == ValidationStatus.Valid
-            ? "valid"
-            : outcome.Status.ToString().ToLowerInvariant();
+        var groupFolder = options.OutputGrouping == OutputGrouping.MediaCategory
+            ? outcome.Candidate.Category.ToString().ToLowerInvariant()
+            : StatusFolder(outcome.Status);
+        var outputPath = options.OutputPathLayout == OutputPathLayout.Flat
+            ? Path.GetFileName(outcome.Candidate.RelativePath)
+            : outcome.Candidate.RelativePath;
 
-        var primaryTarget = GetSafePath(CombineOutputPath(options.TargetRoot, statusFolder, outcome.Candidate.RelativePath));
+        var primaryTarget = GetSafePath(CombineOutputPath(options.TargetRoot, groupFolder, outputPath));
         string? backupTarget = null;
 
         // Only write backup when the mode explicitly requests it AND a backup root is configured.
@@ -25,8 +28,8 @@ public sealed class FileActionService : IFileActionService
             && !string.IsNullOrWhiteSpace(options.BackupRoot))
         {
             (primaryTarget, backupTarget) = GetSharedSafePaths(
-                CombineOutputPath(options.TargetRoot, statusFolder, outcome.Candidate.RelativePath),
-                CombineOutputPath(options.BackupRoot, statusFolder, outcome.Candidate.RelativePath));
+                CombineOutputPath(options.TargetRoot, groupFolder, outputPath),
+                CombineOutputPath(options.BackupRoot, groupFolder, outputPath));
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(primaryTarget)!);
@@ -38,7 +41,14 @@ public sealed class FileActionService : IFileActionService
             await CopyAsync(primaryTarget, backupTarget, cancellationToken);
         }
 
-        return new FileActionOutcome("copied", primaryTarget, backupTarget, null);
+        if (options.ActionOperation == FileActionOperation.Move)
+            File.Delete(outcome.Candidate.FullPath);
+
+        return new FileActionOutcome(
+            options.ActionOperation == FileActionOperation.Move ? "moved" : "copied",
+            primaryTarget,
+            backupTarget,
+            null);
     }
 
     private static async Task CopyAsync(string source, string target, CancellationToken cancellationToken)
@@ -80,6 +90,9 @@ public sealed class FileActionService : IFileActionService
             StringSplitOptions.RemoveEmptyEntries);
         return Path.Combine([root, statusFolder, .. parts]);
     }
+
+    private static string StatusFolder(ValidationStatus status) =>
+        status == ValidationStatus.Valid ? "valid" : status.ToString().ToLowerInvariant();
 
     private static (string PrimaryTarget, string BackupTarget) GetSharedSafePaths(string primaryTarget, string backupTarget)
     {

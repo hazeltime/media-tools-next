@@ -23,7 +23,7 @@
             {
                 <label>
                     Target folder
-                    <small>Sorted copies are written here by outcome.</small>
+                    <small>Selected files are written here using the output options.</small>
                     <div class="input-action">
                         <input @bind="State.TargetRoot" />
                         <button @onclick="PickTarget">Browse</button>
@@ -34,7 +34,7 @@
             {
                 <label>
                     Backup folder
-                    <small>Receives a mirror of sorted target copies.</small>
+                    <small>Receives a mirror of selected target writes.</small>
                     <div class="input-action">
                         <input @bind="State.BackupRoot" />
                         <button @onclick="PickBackup">Browse</button>
@@ -46,11 +46,11 @@
             <div><strong>Source</strong><span>Read-only. Files are opened for validation only.</span></div>
             @if (State.Mode != ScanActionMode.DryRun)
             {
-                <div><strong>Target</strong><span>Used only by copy modes. Creates valid / corrupt / unknown / error folders.</span></div>
+                <div><strong>Target</strong><span>Used only by write modes. Grouping can be by outcome or media category.</span></div>
             }
             @if (State.Mode == ScanActionMode.CopySortedAndBackup)
             {
-                <div><strong>Backup</strong><span>Used only by copy sorted + backup.</span></div>
+                <div><strong>Backup</strong><span>Used only by write + backup.</span></div>
             }
         </div>
     </section>
@@ -59,12 +59,32 @@
         <h2>Mode</h2>
         <div class="card-grid three">
             <button class="select-card @(State.Mode == ScanActionMode.DryRun ? "active" : "")" @onclick="() => SetMode(ScanActionMode.DryRun)"><strong>Log only</strong><span>Validate and record results. No target writes.</span></button>
-            <button class="select-card @(State.Mode == ScanActionMode.CopySorted ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySorted)"><strong>Copy sorted</strong><span>Copy selected outcomes to target.</span></button>
-            <button class="select-card @(State.Mode == ScanActionMode.CopySortedAndBackup ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySortedAndBackup)"><strong>Copy + backup</strong><span>Copy to target and mirror to backup.</span></button>
+            <button class="select-card @(State.Mode == ScanActionMode.CopySorted ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySorted)"><strong>Write selected</strong><span>Copy or move selected outcomes to target.</span></button>
+            <button class="select-card @(State.Mode == ScanActionMode.CopySortedAndBackup ? "active" : "")" @onclick="() => SetMode(ScanActionMode.CopySortedAndBackup)"><strong>Write + backup</strong><span>Copy or move to target and mirror to backup.</span></button>
         </div>
         @if (State.Mode != ScanActionMode.DryRun)
         {
-            <label class="choice confirm" style="margin-top:12px"><input type="checkbox" @bind="State.ConfirmedLiveMode" /> I understand this mode writes file copies.</label>
+            <div class="form-grid three" style="margin-top:12px">
+                <label>Operation
+                    <select @bind="State.ActionOperation">
+                        <option value="@FileActionOperation.Copy">Copy files</option>
+                        <option value="@FileActionOperation.Move">Move files</option>
+                    </select>
+                </label>
+                <label>Group folders
+                    <select @bind="State.OutputGrouping">
+                        <option value="@OutputGrouping.Status">By outcome</option>
+                        <option value="@OutputGrouping.MediaCategory">By media category</option>
+                    </select>
+                </label>
+                <label>Path layout
+                    <select @bind="State.OutputPathLayout">
+                        <option value="@OutputPathLayout.PreserveRelativePath">Preserve relative paths</option>
+                        <option value="@OutputPathLayout.Flat">Flat destination folders</option>
+                    </select>
+                </label>
+            </div>
+            <label class="choice confirm" style="margin-top:12px"><input type="checkbox" @bind="State.ConfirmedLiveMode" /> I understand this mode writes files and move mode removes originals after a successful write.</label>
         }
     </section>
 

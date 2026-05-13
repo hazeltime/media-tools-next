@@ -22,7 +22,7 @@ public sealed class ExternalToolProbe : IExternalToolProbe
             () => ToolNames.Select(name =>
             {
                 var path = FindExecutable(name);
-                return new ToolStatus(name, path is not null, path, path is null ? "Not found on PATH" : null);
+                return new ToolStatus(name, path is not null, path, path is null ? "Not found on PATH" : null, path is null ? null : ReadVersion(name, path));
             }).ToArray(),
             LazyThreadSafetyMode.ExecutionAndPublication);
     }
@@ -90,6 +90,45 @@ public sealed class ExternalToolProbe : IExternalToolProbe
             !string.Equals(programFilesX86, programFiles, StringComparison.OrdinalIgnoreCase))
         {
             yield return programFilesX86;
+        }
+    }
+
+    private static string? ReadVersion(string name, string path)
+    {
+        var arguments = name switch
+        {
+            "magick" => "-version",
+            "qpdf" => "--version",
+            _ => "-version"
+        };
+
+        try
+        {
+            using var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = path,
+                    Arguments = arguments,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+            process.Start();
+            if (!process.WaitForExit(2000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                return null;
+            }
+
+            var output = (process.StandardOutput.ReadLine() ?? process.StandardError.ReadLine())?.Trim();
+            return string.IsNullOrWhiteSpace(output) ? null : output;
+        }
+        catch
+        {
+            return null;
         }
     }
 }

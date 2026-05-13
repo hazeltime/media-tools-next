@@ -35,7 +35,11 @@ public sealed record ScanOptions(
     long? MaxCandidateBytes = null,
     IReadOnlyList<string>? IncludeFileNamePatterns = null,
     IReadOnlyList<string>? ExcludeFileNamePatterns = null,
-    IReadOnlySet<ValidationStatus>? ActionStatuses = null)
+    IReadOnlySet<ValidationStatus>? ActionStatuses = null,
+    FileActionOperation ActionOperation = FileActionOperation.Copy,
+    OutputGrouping OutputGrouping = OutputGrouping.Status,
+    OutputPathLayout OutputPathLayout = OutputPathLayout.PreserveRelativePath,
+    IReadOnlySet<string>? EnabledExtensions = null)
 {
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
         new(

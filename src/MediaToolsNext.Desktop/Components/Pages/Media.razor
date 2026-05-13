@@ -30,10 +30,11 @@
         </div>
         @if (State.EnableImages)
         {
-            <div class="extension-cloud">
-                @foreach (var ext in ImageExtensions) { <span>@ext</span> }
-            </div>
+            @ExtensionSelector(MediaCategory.Image)
         }
+        @if (State.EnableVideo) { @ExtensionSelector(MediaCategory.Video) }
+        @if (State.EnableAudio) { @ExtensionSelector(MediaCategory.Audio) }
+        @if (State.EnableDocuments) { @ExtensionSelector(MediaCategory.Document) }
     </section>
 
     @if (State.EnableImages)
@@ -69,8 +70,6 @@
 </div>
 
 @code {
-    private static readonly string[] ImageExtensions = GetImageExtensions();
-
     private static string Label(ScanProfile profile) => profile.Name switch
     {
         "quick-images"   => "Quick image check",
@@ -80,16 +79,22 @@
         _                => profile.Name
     };
 
-    private static string[] GetImageExtensions()
-    {
-        var field = typeof(SupportedMedia).GetField("ExtensionToCategory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        if (field?.GetValue(null) is not System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, MediaCategory>> entries)
-            return [];
-
-        return entries
-            .Where(pair => pair.Value == MediaCategory.Image)
-            .Select(pair => pair.Key)
-            .OrderBy(x => x)
-            .ToArray();
-    }
+    private RenderFragment ExtensionSelector(MediaCategory category) => @<div class="extension-selector">
+        <div class="extension-selector-head">
+            <strong>@category extensions</strong>
+            <span>
+                <button class="secondary compact" @onclick="() => State.SelectAllExtensions(category)">All</button>
+                <button class="secondary compact" @onclick="() => State.SelectNoExtensions(category)">None</button>
+            </span>
+        </div>
+        <div class="extension-grid">
+            @foreach (var ext in SupportedMedia.GetExtensions(category))
+            {
+                <label class="choice extension-choice">
+                    <input type="checkbox" checked="@State.IsExtensionEnabled(ext)" @onchange="e => State.ToggleExtension(ext, (bool)e.Value!)" />
+                    @ext
+                </label>
+            }
+        </div>
+    </div>;
 }
