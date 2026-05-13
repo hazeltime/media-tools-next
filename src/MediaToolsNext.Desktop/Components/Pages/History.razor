@@ -54,15 +54,13 @@
 
     private async Task Open(Guid id)
     {
-        State.Results.Clear();
+        var session = State.Sessions.FirstOrDefault(x => x.SessionId == id);
+        if (session is null)
+            return;
+
         var results = await Store.ListResultsAsync(id, CancellationToken.None);
-        State.Results.AddRange(results);
-        State.ResetStatusCounts();
-        foreach (var result in results)
-        {
-            State.IncrementStatusCount(result.Status);
-        }
-        State.Summary = await Store.GetSummaryAsync(id, CancellationToken.None);
+        var summary = await Store.GetSummaryAsync(id, CancellationToken.None);
+        State.LoadSession(session, results, summary);
         Nav.NavigateTo("/results");
     }
 

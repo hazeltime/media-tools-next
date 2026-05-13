@@ -194,37 +194,12 @@
     public void Dispose()
     {
         State.Changed -= OnStateChanged;
-        _throttleTimer?.Dispose();
         _clockTimer?.Dispose();
     }
 
     private System.Threading.Timer? _clockTimer;
-    private readonly System.Collections.Concurrent.ConcurrentQueue<ScanResultRecord> _pending = new();
-    private System.Threading.Timer? _throttleTimer;
-    private const int ThrottleMs = 250;
 
     private void OnStateChanged() => InvokeAsync(StateHasChanged);
-
-    private IProgress<ScanResultRecord> BuildThrottledProgress(ScanPerformanceTracker tracker)
-    {
-        _throttleTimer?.Dispose();
-        _throttleTimer = new System.Threading.Timer(_ =>
-        {
-            if (_pending.IsEmpty) return;
-            InvokeAsync(() =>
-            {
-                while (_pending.TryDequeue(out var r))
-                {
-                    State.Results.Add(r);
-                    State.Performance = tracker.Add(r);
-                    State.IncrementStatusCount(r.Status);
-                    State.AddMatchedBytes(r.Candidate.SizeBytes);
-                }
-                StateHasChanged();
-            });
-        }, null, ThrottleMs, ThrottleMs);
-        return new Progress<ScanResultRecord>(r => _pending.Enqueue(r));
-    }
 
     private IProgress<ScanDiscoveryEvent> BuildDiscoveryProgress() =>
         new Progress<ScanDiscoveryEvent>(e =>
@@ -237,19 +212,6 @@
                 case DiscoveryEventType.FilteredOutFamily:  State.IncrementFilteredOutFamily();  break;
             }
         });
-
-    private void FlushPending(ScanPerformanceTracker tracker)
-    {
-        _throttleTimer?.Dispose();
-        _throttleTimer = null;
-        while (_pending.TryDequeue(out var r))
-        {
-            State.Results.Add(r);
-            State.Performance = tracker.Add(r);
-            State.IncrementStatusCount(r.Status);
-            State.AddMatchedBytes(r.Candidate.SizeBytes);
-        }
-    }
 
     private async Task PreviewAsync()
     {
@@ -274,21 +236,20 @@
         if (Errors.Any()) { State.Message = "Scan blocked: " + Errors[0]; State.NotifyChanged(); return; }
         if (!State.TryStartScan()) { State.Message = "A preview or scan is already running."; State.NotifyChanged(); return; }
         var limit    = new ScanLimitState();
-        var tracker  = new ScanPerformanceTracker();
-        var progress = BuildThrottledProgress(tracker);
+        var progress = State.CreateScanProgress();
         var discoveryProgress = BuildDiscoveryProgress();
         try
         {
             State.Summary = await Pipeline.RunAsync(State.BuildOptions(limit), progress, State.ScanCancellationToken, discoveryProgress);
             State.LastCompletionReason = State.Summary.CompletionReason;
-            FlushPending(tracker);
+            State.FlushPendingScanResults();
             State.FinishScan("Scan complete.");
         }
-        catch (OperationCanceledException) { State.LastCompletionReason = "Cancelled.";   FlushPending(tracker); State.FinishScan("Scan cancelled."); }
-        catch (Exception ex)               { State.LastCompletionReason = "Scan failed."; FlushPending(tracker); State.FinishScan("Scan failed: " + ex.Message); }
+        catch (OperationCanceledException) { State.LastCompletionReason = "Cancelled.";   State.FlushPendingScanResults(); State.FinishScan("Scan cancelled."); }
+        catch (Exception ex)               { State.LastCompletionReason = "Scan failed."; State.FlushPendingScanResults(); State.FinishScan("Scan failed: " + ex.Message); }
         finally
         {
-            if (State.IsScanning) { FlushPending(tracker); State.FinishScan(State.Message ?? "Scan stopped."); }
+            if (State.IsScanning) { State.FlushPendingScanResults(); State.FinishScan(State.Message ?? "Scan stopped."); }
             ScanControl.Resume();
         }
     }

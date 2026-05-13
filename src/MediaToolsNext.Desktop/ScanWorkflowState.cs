@@ -95,6 +95,10 @@ public sealed class ScanWorkflowState
 
     private readonly object runGate = new();
     private CancellationTokenSource? scanCts;
+    private readonly ConcurrentQueue<ScanResultRecord> pendingResults = new();
+    private ScanPerformanceTracker? scanPerformanceTracker;
+    private Timer? progressTimer;
+    private const int ProgressFlushMs = 250;
 
     // ── Per-status counters ───────────────────────────────────────────────────
     private readonly ConcurrentDictionary<ValidationStatus, int> _statusCounts = new();
@@ -154,6 +158,10 @@ public sealed class ScanWorkflowState
             LastRunSettings = BuildRunSettingsSummary();
             scanCts?.Dispose();
             scanCts = new CancellationTokenSource();
+            while (pendingResults.TryDequeue(out _)) { }
+            scanPerformanceTracker = new ScanPerformanceTracker();
+            progressTimer?.Dispose();
+            progressTimer = new Timer(_ => FlushPendingScanResults(), null, ProgressFlushMs, ProgressFlushMs);
             Results.Clear();
             ResetStatusCounts();
             System.Threading.Interlocked.Exchange(ref _matchedBytes, 0);
@@ -172,12 +180,16 @@ public sealed class ScanWorkflowState
 
     public void FinishScan(string message)
     {
+        FlushPendingScanResults(notify: false);
         lock (runGate)
         {
             IsScanning = false;
             LastRunEndedLocal = DateTimeOffset.Now;
             scanCts?.Dispose();
             scanCts = null;
+            progressTimer?.Dispose();
+            progressTimer = null;
+            scanPerformanceTracker = null;
             Message = message;
             _runStopwatch.Stop();
         }
@@ -192,6 +204,58 @@ public sealed class ScanWorkflowState
     }
 
     public void NotifyChanged() => Changed?.Invoke();
+
+    public IProgress<ScanResultRecord> CreateScanProgress() =>
+        new Progress<ScanResultRecord>(record => pendingResults.Enqueue(record));
+
+    public void FlushPendingScanResults(bool notify = true)
+    {
+        var changed = false;
+        lock (runGate)
+        {
+            while (pendingResults.TryDequeue(out var record))
+            {
+                Results.Add(record);
+                scanPerformanceTracker ??= new ScanPerformanceTracker();
+                Performance = scanPerformanceTracker.Add(record);
+                IncrementStatusCount(record.Status);
+                System.Threading.Interlocked.Add(ref _matchedBytes, record.Candidate.SizeBytes);
+                changed = true;
+            }
+        }
+
+        if (changed && notify)
+            NotifyChanged();
+    }
+
+    public void LoadSession(ScanSessionRecord session, IReadOnlyList<ScanResultRecord> results, ScanSummary summary)
+    {
+        lock (runGate)
+        {
+            Results.Clear();
+            Results.AddRange(results);
+            ResetStatusCounts();
+            foreach (var result in results)
+                IncrementStatusCount(result.Status);
+
+            System.Threading.Interlocked.Exchange(ref _matchedBytes, results.Sum(x => x.Candidate.SizeBytes));
+            System.Threading.Interlocked.Exchange(ref _totalSearched, 0);
+            System.Threading.Interlocked.Exchange(ref _filteredOutSize, 0);
+            System.Threading.Interlocked.Exchange(ref _filteredOutPattern, 0);
+            System.Threading.Interlocked.Exchange(ref _filteredOutFamily, 0);
+
+            Summary = summary;
+            Performance = new(TimeSpan.Zero, results.Count, results.Sum(x => x.Candidate.SizeBytes));
+            Preview = null;
+            LastCompletionReason = summary.CompletionReason;
+            LastRunType = "Saved scan";
+            LastRunStartedLocal = session.StartedUtc.ToLocalTime();
+            LastRunEndedLocal = results.Count == 0 ? session.StartedUtc.ToLocalTime() : results.Max(x => x.TimestampUtc).ToLocalTime();
+            LastRunSettings = $"{session.ActionMode}, loaded from history; source {session.SourcePath}.";
+            Message = $"Loaded saved scan with {results.Count:N0} results. Discovery filter counters are only available for live runs.";
+        }
+        NotifyChanged();
+    }
 
     public string BuildRunSettingsSummary()
     {

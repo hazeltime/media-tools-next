@@ -6,7 +6,12 @@ namespace MediaToolsNext.Infrastructure;
 
 internal sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError, bool TimedOut, bool ToolNotFound = false);
 
-internal sealed class ProcessRunner
+internal interface IProcessRunner
+{
+    Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, CancellationToken cancellationToken);
+}
+
+internal sealed class ProcessRunner : IProcessRunner
 {
     public async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
     {
@@ -43,16 +48,13 @@ internal sealed class ProcessRunner
                 lock (stderrLock) stderr.AppendLine(e.Data);
         };
 
-        // BUG FIX: Process.Start() throws Win32Exception if the executable is not
-        // found or not executable. Catch it here and return a descriptive timed-out
-        // result so callers see a clean error outcome rather than an unhandled crash.
         try
         {
             process.Start();
         }
         catch (Win32Exception ex)
         {
-            return new ProcessResult(-1, string.Empty, $"tool_not_found: {fileName} — {ex.Message}", false, true);
+            return new ProcessResult(-1, string.Empty, $"tool_not_found: {fileName} - {ex.Message}", false, true);
         }
 
         process.BeginOutputReadLine();
@@ -61,6 +63,7 @@ internal sealed class ProcessRunner
         try
         {
             await process.WaitForExitAsync(timeoutCts.Token);
+            process.WaitForExit();
             return new ProcessResult(
                 process.ExitCode,
                 stdout.ToString().Trim(),

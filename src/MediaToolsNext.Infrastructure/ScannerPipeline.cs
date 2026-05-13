@@ -21,11 +21,12 @@ public sealed class ScannerPipeline(
     {
         using var runtimeCts = CreateRuntimeCancellation(options, cancellationToken);
         var runToken = runtimeCts?.Token ?? cancellationToken;
+        var maxConcurrency = Math.Clamp(options.MaxConcurrency, 1, 32);
 
         await store.InitializeAsync(runToken);
         var sessionId = await store.CreateSessionAsync(options, runToken);
 
-        var channel = Channel.CreateBounded<FileCandidate>(new BoundedChannelOptions(Math.Max(16, options.MaxConcurrency * 4))
+        var channel = Channel.CreateBounded<FileCandidate>(new BoundedChannelOptions(Math.Max(16, maxConcurrency * 4))
         {
             SingleWriter = true,
             SingleReader = false,
@@ -53,7 +54,7 @@ public sealed class ScannerPipeline(
 
         const int BatchSize = 32;
 
-        var workers = Enumerable.Range(0, Math.Max(1, (Environment.ProcessorCount + 1) / 2)).Select(_ => Task.Run(async () =>
+        var workers = Enumerable.Range(0, maxConcurrency).Select(_ => Task.Run(async () =>
         {
             var buffer = new List<ScanResultRecord>(BatchSize);
 

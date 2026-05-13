@@ -127,6 +127,60 @@ public class ScannerPipelineFlowTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task PipelineHonorsConfiguredMaxConcurrency()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            for (var i = 0; i < 5; i++)
+                File.WriteAllText(Path.Combine(root, $"file-{i}.txt"), "hello");
+
+            var db = Path.Combine(root, "state.db");
+            var validator = new ConcurrencyTrackingValidator();
+            var pipeline = new ScannerPipeline(
+                new FileDiscoverer(),
+                new ValidatorRegistry([validator]),
+                new FileActionService(),
+                new SqliteScanStore(db),
+                new ScanControl());
+
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with { MaxConcurrency = 1 };
+            await pipeline.RunAsync(options, null, CancellationToken.None);
+
+            Assert.Equal(1, validator.MaxObserved);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task PipelineUsesConfiguredParallelismAboveOne()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            for (var i = 0; i < 8; i++)
+                File.WriteAllText(Path.Combine(root, $"file-{i}.txt"), "hello");
+
+            var db = Path.Combine(root, "state.db");
+            var validator = new ConcurrencyTrackingValidator();
+            var pipeline = new ScannerPipeline(
+                new FileDiscoverer(),
+                new ValidatorRegistry([validator]),
+                new FileActionService(),
+                new SqliteScanStore(db),
+                new ScanControl());
+
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with { MaxConcurrency = 2 };
+            await pipeline.RunAsync(options, null, CancellationToken.None);
+
+            Assert.InRange(validator.MaxObserved, 2, 2);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class CountingValidator : IMediaValidator
     {
         public int Calls { get; private set; }
@@ -147,6 +201,37 @@ public class ScannerPipelineFlowTests
         {
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
             return new ValidationOutcome(candidate, ValidationStatus.Valid, "slow", null, TimeSpan.Zero);
+        }
+    }
+
+    private sealed class ConcurrencyTrackingValidator : IMediaValidator
+    {
+        private int _active;
+        private int _maxObserved;
+
+        public MediaCategory Category => MediaCategory.Document;
+        public int MaxObserved => _maxObserved;
+
+        public async Task<ValidationOutcome> ValidateAsync(FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
+        {
+            var active = Interlocked.Increment(ref _active);
+            int snapshot;
+            do
+            {
+                snapshot = _maxObserved;
+                if (active <= snapshot) break;
+            }
+            while (Interlocked.CompareExchange(ref _maxObserved, active, snapshot) != snapshot);
+
+            try
+            {
+                await Task.Delay(25, cancellationToken);
+                return new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
         }
     }
 }
