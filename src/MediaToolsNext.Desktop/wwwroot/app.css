@@ -95,7 +95,7 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 /* ═══════════════════════════════════════════════════════════════════════════
    Layout shells
    ══════════════════════════════════════════════════════════════════════════ */
-.content { padding-top: 1rem; }
+.content { padding-top: 1rem; padding-bottom: 3rem; }
 
 /* Page-level stacking used by pages that are NOT Configure -->
 .page-stack { display: grid; gap: var(--gap-lg); width: 100%; }
