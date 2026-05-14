@@ -49,16 +49,16 @@
     {
         <section class="panel live-counts-panel">
             <div class="progress-strip">
-                <div class="progress-metric">
-                    <span><strong>Time</strong><em>@Percent(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)</em></span>
+                <div class="progress-metric @(State.IsScanning ? "active" : "idle")">
+                    <span><strong>Time</strong><em>@ProgressLabel(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)</em></span>
                     <div class="progress-track"><div style="width:@ProgressStyle(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)"></div></div>
                 </div>
-                <div class="progress-metric">
-                    <span><strong>Matched files</strong><em>@Percent(State.Results.Count, State.MaxMatchedFiles)</em></span>
+                <div class="progress-metric @(State.IsScanning ? "active" : "idle")">
+                    <span><strong>Matched files</strong><em>@ProgressLabel(State.Results.Count, State.MaxMatchedFiles)</em></span>
                     <div class="progress-track"><div style="width:@ProgressStyle(State.Results.Count, State.MaxMatchedFiles)"></div></div>
                 </div>
-                <div class="progress-metric">
-                    <span><strong>Matched MB</strong><em>@Percent(State.MatchedMb, State.MaxMatchedMb)</em></span>
+                <div class="progress-metric @(State.IsScanning ? "active" : "idle")">
+                    <span><strong>Matched MB</strong><em>@ProgressLabel(State.MatchedMb, State.MaxMatchedMb)</em></span>
                     <div class="progress-track"><div style="width:@ProgressStyle(State.MatchedMb, State.MaxMatchedMb)"></div></div>
                 </div>
             </div>
@@ -204,9 +204,11 @@
     private static string FormatElapsed(TimeSpan t) => t.TotalHours >= 1
         ? $"{(int)t.TotalHours}h {t.Minutes:D2}m {t.Seconds:D2}s"
         : $"{t.Minutes:D2}m {t.Seconds:D2}s";
-    private static string Percent(double value, double total) => total <= 0 ? "n/a" : $"{Math.Clamp(value / total, 0, 1):P0}";
+    private string Percent(double value, double total) => total <= 0 ? "n/a" : $"{Math.Clamp(value / total, 0, 1):P0}";
+    private string ProgressLabel(double value, double total) =>
+        State.IsScanning ? Percent(value, total) : State.Results.Any() ? "last run" : "n/a";
     private static double Progress(double value, double total) => total <= 0 ? 0 : Math.Clamp(value / total * 100d, 0, 100);
-    private static string ProgressStyle(double value, double total) => $"{Progress(value, total):0.##}%";
+    private string ProgressStyle(double value, double total) => State.IsScanning ? $"{Progress(value, total):0.##}%" : "0%";
 
     protected override void OnInitialized()
     {

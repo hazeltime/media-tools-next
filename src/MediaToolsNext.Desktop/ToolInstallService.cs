@@ -30,6 +30,31 @@ public sealed class ToolInstallService
             : new(false, $"{choco.Command}; {winget.Command}", choco.Output + Environment.NewLine + winget.Output);
     }
 
+    public async Task<ToolInstallResult> UpgradeAsync(string toolName, CancellationToken cancellationToken)
+    {
+        if (!Packages.TryGetValue(toolName, out var package))
+            return new(false, toolName, "No installer package mapping is configured for this tool.");
+
+        var choco = await TryRunAsync("choco", ["upgrade", package.Choco, "-y", "--no-progress"], cancellationToken);
+        if (choco.Success)
+            return choco;
+
+        var winget = await TryRunAsync("winget", ["upgrade", "--id", package.Winget, "--silent", "--accept-source-agreements", "--accept-package-agreements"], cancellationToken);
+        return winget.Success
+            ? winget
+            : new(false, $"{choco.Command}; {winget.Command}", choco.Output + Environment.NewLine + winget.Output);
+    }
+
+    public async Task<ToolInstallResult> UpgradeAllAsync(IEnumerable<string> toolNames, CancellationToken cancellationToken)
+    {
+        var results = new List<ToolInstallResult>();
+        foreach (var toolName in toolNames.Distinct(StringComparer.OrdinalIgnoreCase))
+            results.Add(await UpgradeAsync(toolName, cancellationToken));
+
+        var success = results.All(result => result.Success);
+        return new(success, "upgrade all", string.Join(Environment.NewLine + Environment.NewLine, results.Select(result => $"{result.Command}: {result.Output}")));
+    }
+
     private static async Task<ToolInstallResult> TryRunAsync(string fileName, string[] arguments, CancellationToken cancellationToken)
     {
         var commandText = fileName + " " + string.Join(" ", arguments);

@@ -12,20 +12,34 @@
     @if (!string.IsNullOrWhiteSpace(_message)) { <div class="notice">@_message</div> }
 
     <section class="panel">
-        <h2>Validator tools</h2>
+        <div class="panel-title-row">
+            <div>
+                <h2>Validator tools</h2>
+                <p class="muted">The app probes these commands directly. Refresh after install or upgrade if PATH changed.</p>
+            </div>
+            <div class="action-bar">
+                <button class="secondary" disabled="@IsBusy" @onclick="RefreshTools">Refresh status</button>
+                <button disabled="@IsBusy" @onclick="UpgradeAllAsync">Check and upgrade all</button>
+            </div>
+        </div>
         <div class="tool-status-grid">
-            @foreach (var tool in ToolProbe.GetStatuses())
+            @foreach (var tool in ToolStatuses)
             {
                 <div class="tool-status-card @(tool.IsAvailable ? "ok" : "missing")">
                     <div>
                         <strong>@tool.Name</strong>
-                        <span>@(tool.IsAvailable ? "Available" : "Missing")</span>
+                        <span class="tool-state @(tool.IsAvailable ? "ok" : "missing")">@ToolState(tool)</span>
                     </div>
-                    <p>@(tool.Version ?? tool.Detail ?? "Version unavailable")</p>
+                    <p>@ToolDetail(tool)</p>
                     <small title="@tool.Path">@((tool.Path ?? "Not found on PATH"))</small>
-                    <button class="secondary" disabled="@(_installing is not null)" @onclick="() => InstallAsync(tool.Name)">
-                        @ButtonText(tool.Name)
-                    </button>
+                    <div class="action-bar">
+                        <button class="secondary" disabled="@IsBusy" @onclick="() => InstallAsync(tool.Name)">
+                            @InstallButtonText(tool)
+                        </button>
+                        <button class="secondary" disabled="@IsBusy || !tool.IsAvailable" @onclick="() => UpgradeAsync(tool.Name)">
+                            @UpgradeButtonText(tool.Name)
+                        </button>
+                    </div>
                 </div>
             }
         </div>
@@ -39,13 +53,31 @@
 
 @code {
     private string? _installing;
+    private string? _upgrading;
     private string? _message;
+    private IReadOnlyList<ToolStatus> ToolStatuses => ToolProbe.GetStatuses();
+    private bool IsBusy => _installing is not null || _upgrading is not null;
 
-    private string ButtonText(string toolName)
+    private static string ToolState(ToolStatus tool) =>
+        tool.IsAvailable ? "Already installed" : "Missing / not installed";
+
+    private static string ToolDetail(ToolStatus tool) =>
+        tool.IsAvailable ? tool.Version ?? "Installed, version unavailable" : tool.Detail ?? "Command is not available.";
+
+    private string InstallButtonText(ToolStatus tool)
     {
-        if (_installing == toolName) return "Installing...";
-        if (toolName == "ffprobe") return "Install ffmpeg";
-        return "Install";
+        if (_installing == tool.Name) return "Installing...";
+        if (tool.IsAvailable) return tool.Name == "ffprobe" ? "Reinstall ffmpeg" : "Reinstall";
+        return tool.Name == "ffprobe" ? "Install ffmpeg" : "Install";
+    }
+
+    private string UpgradeButtonText(string toolName) =>
+        _upgrading == toolName || _upgrading == "*" ? "Checking..." : "Check / upgrade";
+
+    private void RefreshTools()
+    {
+        ToolProbe.Refresh();
+        _message = "Tool status refreshed.";
     }
 
     private async Task InstallAsync(string toolName)
@@ -56,12 +88,49 @@
         {
             var result = await Installer.InstallAsync(toolName, CancellationToken.None);
             _message = result.Success
-                ? $"Install command completed: {result.Command}. Restart the app or refresh PATH if the tool still appears missing."
+                ? $"Install command completed: {result.Command}. Refreshed tool status; restart the app if PATH still has not updated."
                 : $"Install failed: {result.Command}. {TrimOutput(result.Output)}";
+            ToolProbe.Refresh();
         }
         finally
         {
             _installing = null;
+        }
+    }
+
+    private async Task UpgradeAsync(string toolName)
+    {
+        _upgrading = toolName;
+        _message = $"Checking/upgrading {toolName}...";
+        try
+        {
+            var result = await Installer.UpgradeAsync(toolName, CancellationToken.None);
+            _message = result.Success
+                ? $"Upgrade check completed: {result.Command}. {TrimOutput(result.Output)}"
+                : $"Upgrade check failed: {result.Command}. {TrimOutput(result.Output)}";
+            ToolProbe.Refresh();
+        }
+        finally
+        {
+            _upgrading = null;
+        }
+    }
+
+    private async Task UpgradeAllAsync()
+    {
+        _upgrading = "*";
+        _message = "Checking/upgrading all validator tools...";
+        try
+        {
+            var result = await Installer.UpgradeAllAsync(ToolStatuses.Select(t => t.Name), CancellationToken.None);
+            _message = result.Success
+                ? $"Upgrade checks completed. {TrimOutput(result.Output)}"
+                : $"One or more upgrade checks failed. {TrimOutput(result.Output)}";
+            ToolProbe.Refresh();
+        }
+        finally
+        {
+            _upgrading = null;
         }
     }
 

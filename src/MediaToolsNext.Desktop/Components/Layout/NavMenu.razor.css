@@ -22,10 +22,11 @@
 
 .navbar-brand {
     color: #f8fbff;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 1.28rem;
+    font-family: "Bahnschrift", "Segoe UI Variable Display", "Aptos Display", sans-serif;
+    font-size: 1.24rem;
     font-weight: 800;
-    letter-spacing: .02em;
+    letter-spacing: 0;
+    text-transform: uppercase;
 }
 
 .bi {
@@ -56,6 +57,34 @@
 
 .bi-table-nav-menu {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M1 3h14v10H1V3zm2 2v2h3V5H3zm5 0v2h5V5H8zM3 9v2h3V9H3zm5 0v2h5V9H8z'/%3E%3C/svg%3E");
+}
+
+.bi-chevron-down-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4H4z'/%3E%3C/svg%3E");
+}
+
+.bi-chevron-right-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M6 4l4 4-4 4V4z'/%3E%3C/svg%3E");
+}
+
+.bi-valid-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%239df2ba' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5 14 4v4.3c0 3-2.4 5.1-6 6.2-3.6-1.1-6-3.2-6-6.2V4l6-2.5zm3.4 4.7-1-1-3.1 3.1-1.5-1.5-1 1 2.5 2.5 4.1-4.1z'/%3E%3C/svg%3E");
+}
+
+.bi-corrupt-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23ffb4b4' viewBox='0 0 16 16'%3E%3Cpath d='M8 1 15 14H1L8 1zm-.7 4v4h1.4V5H7.3zm0 5.5V12h1.4v-1.5H7.3z'/%3E%3C/svg%3E");
+}
+
+.bi-unknown-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23ffd978' viewBox='0 0 16 16'%3E%3Cpath d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm-.7 10.5h1.4V10H7.3v1.5zM8 4.1c-1.4 0-2.3.7-2.7 1.8l1.2.5c.2-.6.7-1 1.4-1 .8 0 1.3.4 1.3 1 0 .8-.7 1-1.3 1.5-.5.4-.7.8-.7 1.4h1.3c0-.4.2-.6.6-.9.7-.5 1.5-1 1.5-2.1 0-1.3-1-2.2-2.6-2.2z'/%3E%3C/svg%3E");
+}
+
+.bi-error-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23ffc0d0' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5 14.5 8 8 14.5 1.5 8 8 1.5zm-.7 3v4h1.4v-4H7.3zm0 5.5v1.5h1.4V10H7.3z'/%3E%3C/svg%3E");
+}
+
+.bi-skipped-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23b7c6d8' viewBox='0 0 16 16'%3E%3Cpath d='M2 3h2v10H2V3zm3.5 0 4.5 5-4.5 5V3zm5 0 4.5 5-4.5 5V3z'/%3E%3C/svg%3E");
 }
 
 .bi-clock-nav-menu {
@@ -118,6 +147,49 @@
 .nav-item ::deep .nav-link:hover {
     background-color: rgba(255,255,255,0.12);
     color: white;
+}
+
+.nav-result-root {
+    align-items: center;
+    display: grid;
+    gap: 4px;
+    grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.nav-result-root ::deep .nav-link {
+    padding-left: 0;
+}
+
+.nav-tree-toggle {
+    align-items: center;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 6px;
+    display: flex;
+    height: 28px;
+    justify-content: center;
+    padding: 0;
+    width: 28px;
+}
+
+.nav-tree-toggle:hover {
+    background: rgba(255, 255, 255, .12);
+}
+
+.nav-tree-toggle .bi {
+    height: 1rem;
+    margin: 0;
+    width: 1rem;
+}
+
+.nav-sub {
+    padding-bottom: .25rem;
+}
+
+.nav-sub ::deep .nav-link {
+    height: 2.35rem;
+    line-height: 2.35rem;
+    padding-left: 1.65rem;
 }
 
 /* About button — same style as nav links */

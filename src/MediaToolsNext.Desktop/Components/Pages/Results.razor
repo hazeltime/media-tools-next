@@ -201,69 +201,53 @@
             </section>
         }
 
-        <section class="panel result-tree">
-            <details open>
-                <summary>Result tree</summary>
-                <div class="tree-grid">
-                    @foreach (var statusGroup in State.Results.GroupBy(r => r.Status).OrderBy(g => g.Key))
+        <div class="results-layout @(_previewPinned ? "has-preview" : "")">
+            <div class="results-main">
+                <!-- Results table -->
+                <section class="panel results-panel">
+                    <div class="result-count">
+                        <strong>@_filteredCount.ToString("N0")</strong>
+                        <span>
+                            page @(_page + 1) of @TotalPages, showing @_pagedRows.Count.ToString("N0") rows.
+                        </span>
+                    </div>
+                    @if (State.GroupReportByStatus && _visibleRows.Count > 0)
                     {
-                        <details open="@IsTreeOpen(statusGroup.Key.ToString())">
-                            <summary @onclick="() => ToggleTree(statusGroup.Key.ToString())">@statusGroup.Key <span>@statusGroup.Count().ToString("N0")</span></summary>
-                            @foreach (var categoryGroup in statusGroup.GroupBy(r => r.Candidate.Category).OrderBy(g => g.Key))
-                            {
-                                <button class="tree-leaf" @onclick="() => ApplyTreeFilter(statusGroup.Key, categoryGroup.Key)">
-                                    @categoryGroup.Key <span>@categoryGroup.Count().ToString("N0")</span>
-                                </button>
-                            }
-                        </details>
+                        @foreach (var group in _pagedRows.GroupBy(r => r.Status))
+                        {
+                            <h3 class="result-group-heading">@group.Key <span>@group.Count().ToString("N0")</span></h3>
+                            @ResultTable(group)
+                        }
                     }
-                </div>
-            </details>
-        </section>
-
-        <!-- Results table -->
-        <section class="panel results-panel @( _previewPinned ? "with-preview" : "")">
-            <div class="result-count">
-                <strong>@_filteredCount.ToString("N0")</strong>
-                <span>
-                    page @(_page + 1) of @TotalPages, showing @_pagedRows.Count.ToString("N0") rows.
-                </span>
+                    else
+                    {
+                        @ResultTable(_pagedRows)
+                    }
+                    <div class="pager">
+                        <button class="secondary compact" disabled="@(_page == 0)" @onclick="PreviousPage">Prev</button>
+                        <span>@((_pageStart + 1).ToString("N0"))-@Math.Min(_pageStart + _pageSize, _filteredCount).ToString("N0") of @_filteredCount.ToString("N0")</span>
+                        <button class="secondary compact" disabled="@(_page >= TotalPages - 1)" @onclick="NextPage">Next</button>
+                    </div>
+                </section>
             </div>
-            @if (State.GroupReportByStatus && _visibleRows.Count > 0)
-            {
-                @foreach (var group in _pagedRows.GroupBy(r => r.Status))
-                {
-                    <h3 class="result-group-heading">@group.Key <span>@group.Count().ToString("N0")</span></h3>
-                    @ResultTable(group)
-                }
-            }
-            else
-            {
-                @ResultTable(_pagedRows)
-            }
-            <div class="pager">
-                <button class="secondary compact" disabled="@(_page == 0)" @onclick="PreviousPage">Prev</button>
-                <span>@((_pageStart + 1).ToString("N0"))-@Math.Min(_pageStart + _pageSize, _filteredCount).ToString("N0") of @_filteredCount.ToString("N0")</span>
-                <button class="secondary compact" disabled="@(_page >= TotalPages - 1)" @onclick="NextPage">Next</button>
-            </div>
-        </section>
 
-        @if (_previewPinned)
-        {
-            <aside class="preview-panel @(_previewCollapsed ? "collapsed" : "")">
-                <div class="preview-head">
-                    <strong>@(_previewRow?.Candidate.RelativePath ?? "Preview")</strong>
-                    <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="PreviousImageAsync">Prev</button>
-                    <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="NextImageAsync">Next</button>
-                    <button class="secondary compact" @onclick="() => _previewCollapsed = !_previewCollapsed">@(_previewCollapsed ? "Expand" : "Fold")</button>
-                    <button class="secondary compact" @onclick="() => _previewPinned = false">Unpin</button>
-                </div>
-                @if (!_previewCollapsed)
-                {
-                    @PreviewContent()
-                }
-            </aside>
-        }
+            @if (_previewPinned)
+            {
+                <aside class="preview-panel @(_previewCollapsed ? "collapsed" : "")">
+                    <div class="preview-head">
+                        <strong>@(_previewRow?.Candidate.RelativePath ?? "Preview")</strong>
+                        <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="PreviousImageAsync">Prev</button>
+                        <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="NextImageAsync">Next</button>
+                        <button class="secondary compact" @onclick="() => _previewCollapsed = !_previewCollapsed">@(_previewCollapsed ? "Expand" : "Fold")</button>
+                        <button class="secondary compact" @onclick="() => _previewPinned = false">Unpin</button>
+                    </div>
+                    @if (!_previewCollapsed)
+                    {
+                        @PreviewContent()
+                    }
+                </aside>
+            }
+        </div>
     }
 
     @if (_previewRow is not null && !_previewPinned)
@@ -342,8 +326,6 @@
     private int _pageStart => _page * _pageSize;
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filteredCount / (double)_pageSize));
     private readonly HashSet<string> _selectedKeys = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _openTree = new(StringComparer.OrdinalIgnoreCase);
-    private MediaCategory? _treeCategoryFilter;
     private ScanResultRecord? _previewRow;
     private string? _previewDataUri;
     private bool _previewPinned = true;
@@ -440,7 +422,6 @@
         var filtered = sorted.Where(r =>
         {
             if (statusFilter.HasValue && r.Status != statusFilter.Value) return false;
-            if (_treeCategoryFilter.HasValue && r.Candidate.Category != _treeCategoryFilter.Value) return false;
             if (!string.IsNullOrWhiteSpace(_detailGroup) && !NormalizeDetail(r.Detail).Equals(_detailGroup, StringComparison.OrdinalIgnoreCase)) return false;
             if (string.IsNullOrWhiteSpace(_searchText)) return true;
             return r.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -533,19 +514,6 @@
     {
         _page = 0;
         RebuildCache();
-    }
-
-    private bool IsTreeOpen(string key) => _openTree.Contains(key);
-    private void ToggleTree(string key)
-    {
-        if (!_openTree.Add(key))
-            _openTree.Remove(key);
-    }
-
-    private void ApplyTreeFilter(ValidationStatus status, MediaCategory category)
-    {
-        _treeCategoryFilter = category;
-        SetTab(status.ToString().ToLowerInvariant());
     }
 
     private async Task WriteSelectedAsync(FileActionOperation operation, OutputPathLayout layout)

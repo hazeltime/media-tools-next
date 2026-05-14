@@ -7,30 +7,40 @@ public sealed class ExternalToolProbe : IExternalToolProbe
 {
     private static readonly string[] ToolNames = ["ffmpeg", "ffprobe", "magick", "qpdf"];
 
-    // ExecutionAndPublication ensures the Lazy is initialised once even if multiple
-    // threads race to read _statuses.Value for the first time.
-    private readonly Lazy<IReadOnlyList<ToolStatus>> _statuses;
-
     // ConcurrentDictionary eliminates the race where two threads both call
     // ResolveExecutable for the same key before either has cached the result.
     private readonly ConcurrentDictionary<string, string?> _pathCache =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _statusesLock = new();
+    private IReadOnlyList<ToolStatus>? _statuses;
 
-    public ExternalToolProbe()
+    public IReadOnlyList<ToolStatus> GetStatuses()
     {
-        _statuses = new Lazy<IReadOnlyList<ToolStatus>>(
-            () => ToolNames.Select(name =>
-            {
-                var path = FindExecutable(name);
-                return new ToolStatus(name, path is not null, path, path is null ? "Not found on PATH" : null, path is null ? null : ReadVersion(name, path));
-            }).ToArray(),
-            LazyThreadSafetyMode.ExecutionAndPublication);
+        if (_statuses is not null) return _statuses;
+        lock (_statusesLock)
+        {
+            return _statuses ??= ProbeStatuses();
+        }
     }
-
-    public IReadOnlyList<ToolStatus> GetStatuses() => _statuses.Value;
 
     public string? FindExecutable(string commandName) =>
         _pathCache.GetOrAdd(commandName, ResolveExecutable);
+
+    public void Refresh()
+    {
+        lock (_statusesLock)
+        {
+            _pathCache.Clear();
+            _statuses = null;
+        }
+    }
+
+    private IReadOnlyList<ToolStatus> ProbeStatuses() =>
+        ToolNames.Select(name =>
+        {
+            var path = FindExecutable(name);
+            return new ToolStatus(name, path is not null, path, path is null ? "Not found on PATH" : null, path is null ? null : ReadVersion(name, path));
+        }).ToArray();
 
     private static string? ResolveExecutable(string commandName)
     {

@@ -40,6 +40,7 @@ public interface IExternalToolProbe
 {
     IReadOnlyList<ToolStatus> GetStatuses();
     string? FindExecutable(string commandName);
+    void Refresh() { }
 }
 
 public interface IScannerPipeline

@@ -4,31 +4,94 @@
     <header class="page-header">
         <p class="eyebrow">Reference</p>
         <h1>Help</h1>
-        <p>Quick reference for common questions about Media Tools Next.</p>
+        <p>Concise guide to configuring scans, running validation, reviewing results, and managing external tools.</p>
     </header>
 
     <section class="panel help-panel">
-        <h2>Source and files</h2>
-        <details><summary>What happens to source files?</summary><p>Source files are read for validation. The app does not modify, move, rename, or delete originals.</p></details>
-        <details><summary>What is copied?</summary><p>Copy modes copy only selected outcomes to target folders: valid, corrupt, unknown, and error.</p></details>
-        <details><summary>What do the check levels mean?</summary><p>Quick checks file existence, non-zero size, and image header bytes. Medium adds ImageMagick identify -ping when available. In-depth asks ImageMagick to read the image without -ping for stronger corruption detection.</p></details>
-        <details><summary>What do limits count?</summary><p>Limits count matched files only. In image-only mode, max files means max image files. Set any limit to 0 to disable it.</p></details>
-    </section>
-
-    <section class="panel help-panel">
-        <h2>External tools</h2>
-        <details><summary>Which external tools are used?</summary><p>ffmpeg and ffprobe for video and audio validation; ImageMagick (magick) for deep image checks. All are optional — the app falls back to header checks if a tool is missing.</p></details>
-        <details><summary>How do I install the tools?</summary>
-            <p>Run in PowerShell (requires Chocolatey):</p>
-            <pre><code>choco install ffmpeg imagemagick -y</code></pre>
-            <p>ImageMagick is also probed under Program Files when <code>magick</code> is not on PATH.</p>
+        <h2>Workflow</h2>
+        <details open>
+            <summary>What pages should I use?</summary>
+            <p>Start at <a href="/configure">Configure</a> to choose folders, media families, validation depth, limits, and output behavior. Use <a href="/run">Run</a> to preview matches, pass preflight, and start, pause, resume, or cancel a scan. Review and export rows in <a href="/results">Results</a>, reload old sessions from <a href="/history">Saved scans</a>, and check validators on <a href="/tools">Tools</a>.</p>
         </details>
-        <details><summary>How do I verify tools are found?</summary><p>Go to the Validation step — the tool row at the top shows each tool as green (found) or red (missing). Hover a badge to see the resolved path.</p></details>
+        <details>
+            <summary>Are source files changed?</summary>
+            <p>Log only mode only validates and records results. Write modes copy or move selected outcomes to a target folder; move mode removes originals only after the destination write succeeds. Originals are never modified during validation.</p>
+        </details>
     </section>
 
     <section class="panel help-panel">
-        <h2>Output and export</h2>
-        <details><summary>What export formats are available?</summary><p>CSV produces a full structured file with all fields. TXT produces a tab-separated plain text file with status, category, path, and detail columns.</p></details>
-        <details><summary>Where is the scan database stored?</summary><p>By default, sessions are stored in <code>%LocalAppData%\media-tools-next\media-tools-next.db</code>. You can override the path via the CLI <code>--db</code> flag.</p></details>
+        <h2>Configure</h2>
+        <details>
+            <summary>What can I scan?</summary>
+            <p><a href="/configure">Configure</a> supports image presets plus image, video, audio, and document families. You can enable extensions per family, add custom image extensions, and filter by filename regex, include/exclude wildcards, and min/max file size.</p>
+        </details>
+        <details>
+            <summary>What do validation levels mean?</summary>
+            <p>Quick checks file existence, non-zero size, and headers. Medium adds lightweight external probes when available. In-depth asks external tools to read more of the file for stronger corruption detection.</p>
+        </details>
+        <details>
+            <summary>What do hard limits count?</summary>
+            <p>Limits stop discovery by runtime, matched file count, or matched MB. They count files that match the configured media and filters, not every file searched. Set a limit to 0 to disable it.</p>
+        </details>
+        <details>
+            <summary>How are copied or moved files organized?</summary>
+            <p>Write modes can group output by validation outcome or media category. Path layout controls whether destinations preserve each file's relative source path or flatten into one folder. Backup mode mirrors the selected target writes to the backup folder.</p>
+        </details>
+    </section>
+
+    <section class="panel help-panel">
+        <h2>Run</h2>
+        <details>
+            <summary>What does preview do?</summary>
+            <p><a href="/run">Run preview</a> discovers matching files and folders without validating, copying, moving, or changing anything. Use it to confirm source paths, media families, filters, and size totals before a scan.</p>
+        </details>
+        <details>
+            <summary>What does preflight check?</summary>
+            <p>Preflight blocks scans until required settings are valid, such as source folder, live-mode confirmation, and write destinations. Missing external tools do not always block scans; validation may fall back or produce unknown results.</p>
+        </details>
+        <details>
+            <summary>What do progress and input counts mean?</summary>
+            <p>Searched is every file discovery touched. Filtered size, pattern, and family are files dropped before validation. Matched files enter validation and count toward matched file and matched MB limits. Completion explains whether the source ended, a limit was reached, the scan was cancelled, or a failure occurred.</p>
+        </details>
+    </section>
+
+    <section class="panel help-panel">
+        <h2>Results</h2>
+        <details>
+            <summary>How do result filters work?</summary>
+            <p><a href="/results">Results</a> has clickable summary tiles for input counts and outcome tabs such as <a href="/results/valid">Valid</a>, <a href="/results/corrupt">Corrupt</a>, <a href="/results/unknown">Unknown</a>, <a href="/results/error">Error</a>, and <a href="/results/skipped">Skipped</a>. Search matches path, detail, and validator text; detail groups, sorting, paging, and grouped reports narrow the visible rows.</p>
+        </details>
+        <details>
+            <summary>What do statuses mean?</summary>
+            <p>Valid passed validation. Corrupt failed a validator check. Unknown means inconclusive, such as missing tools, encrypted or unsupported content, warning-only probe output, or headers that cannot prove validity. Error means the validator crashed, timed out, or hit an I/O failure. Skipped means a matched file reached the pipeline but had no validator; most disabled or unsupported families are counted earlier as filtered family.</p>
+        </details>
+        <details>
+            <summary>How do selected result actions work?</summary>
+            <p>Select rows on the current page or all filtered rows, then copy or move selected files. Relative actions preserve each selected row's source-relative path under the destination. Flat actions place files directly in the chosen destination and add numeric suffixes when names collide. Result rows are not changed by these manual batch writes.</p>
+        </details>
+        <details>
+            <summary>Can I preview files?</summary>
+            <p>Image result paths open the built-in preview. The preview can be pinned, folded, navigated with previous/next buttons or arrow keys, and opened externally. Very large images or non-image files may need the external Open action instead.</p>
+        </details>
+        <details>
+            <summary>What exports are available?</summary>
+            <p>Export writes the current result set as CSV or tab-separated TXT using the configured report sort. Status actions can export filtered CSV lists or copy visible full paths to the clipboard.</p>
+        </details>
+    </section>
+
+    <section class="panel help-panel">
+        <h2>Saved scans and tools</h2>
+        <details>
+            <summary>How are scans saved?</summary>
+            <p>Completed sessions are stored in the local SQLite database and can be reloaded from <a href="/history">Saved scans</a>. Loading a saved scan restores its summary and rows, then opens <a href="/results">Results</a>. By default the database is under <code>%LocalAppData%\media-tools-next\media-tools-next.db</code>.</p>
+        </details>
+        <details>
+            <summary>Which external tools are used?</summary>
+            <p>ffmpeg and ffprobe validate video and audio. ImageMagick (<code>magick</code>) strengthens image validation. <a href="/tools">Tools</a> shows available or missing status, version/detail text, and resolved path when found.</p>
+        </details>
+        <details>
+            <summary>How do tool installs work?</summary>
+            <p>The <a href="/tools">Tools</a> page can install missing validators in the background. It tries Chocolatey first with <code>choco install -y --no-progress</code>, then winget with silent install and package agreements accepted. Some installs require administrator permission, an app restart, or a PATH refresh before status changes.</p>
+        </details>
     </section>
 </div>
