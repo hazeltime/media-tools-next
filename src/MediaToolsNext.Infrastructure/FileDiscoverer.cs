@@ -184,11 +184,10 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 Stop($"Stopped after inspecting {maxSearchedFiles:N0} searched files.");
                 return true;
             }
-            if (options.MinScannedBytes is long minScannedBytes && scannedBytes < minScannedBytes)
-            {
-                // Not enough scanned yet, continue scanning
-            }
-            if (options.MaxScannedBytes is long maxScannedBytes && scannedBytes > maxScannedBytes)
+            var minScannedBytesReached = options.MinScannedBytes is not long minScannedBytes || scannedBytes >= minScannedBytes;
+            if (minScannedBytesReached
+                && options.MaxScannedBytes is long maxScannedBytes
+                && scannedBytes > maxScannedBytes)
             {
                 Stop($"Stopped after inspecting {FormatBytes(maxScannedBytes)} of searched data.");
                 return true;
@@ -211,11 +210,11 @@ public sealed class FileDiscoverer : IFileDiscoverer
     // iterator flow after the try/catch.
     private static IEnumerable<(string Path, string? Error)> SafeEnumerateFilesWithErrors(string path)
     {
-        IEnumerable<string>? entries = null;
+        IEnumerator<string>? entries = null;
         string? directoryError = null;
         try
         {
-            entries = Directory.EnumerateFiles(path);
+            entries = Directory.EnumerateFiles(path).GetEnumerator();
         }
         catch (UnauthorizedAccessException ex) { directoryError = "access_denied: " + ex.Message; }
         catch (PathTooLongException)           { yield break; }
@@ -227,19 +226,60 @@ public sealed class FileDiscoverer : IFileDiscoverer
             yield break;
         }
 
-        foreach (var file in entries!)
-            yield return (NormalizeLongPath(file), null);
+        using (entries)
+        {
+            while (true)
+            {
+                string file;
+                string? enumerationError = null;
+                try
+                {
+                    if (!entries!.MoveNext())
+                        yield break;
+                    file = entries.Current;
+                }
+                catch (UnauthorizedAccessException ex) { enumerationError = "access_denied: " + ex.Message; file = path; }
+                catch (PathTooLongException)           { yield break; }
+                catch                                  { yield break; }
+
+                if (enumerationError is not null)
+                {
+                    yield return (file, enumerationError);
+                    yield break;
+                }
+
+                yield return (NormalizeLongPath(file), null);
+            }
+        }
     }
 
     private static IEnumerable<string> SafeEnumerateDirectories(string path)
     {
+        IEnumerator<string> entries;
         try
         {
-            return Directory.EnumerateDirectories(NormalizeLongPath(path))
-                            .Select(NormalizeLongPath)
-                            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+            entries = Directory.EnumerateDirectories(NormalizeLongPath(path)).GetEnumerator();
         }
-        catch { return []; }
+        catch { yield break; }
+
+        var directories = new List<string>();
+        using (entries)
+        {
+            while (true)
+            {
+                try
+                {
+                    if (!entries.MoveNext())
+                        break;
+                    directories.Add(NormalizeLongPath(entries.Current));
+                }
+                catch { yield break; }
+            }
+        }
+
+        directories.Sort(StringComparer.OrdinalIgnoreCase);
+        foreach (var directory in directories)
+            yield return directory;
     }
 
     private static string NormalizeLongPath(string path)

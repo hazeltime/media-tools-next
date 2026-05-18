@@ -265,6 +265,34 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task DiscoveryDelaysMaxScannedBytesUntilMinimumIsReached()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
+            File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "12345");
+            File.WriteAllText(Path.Combine(root, "C_stop.jpg"), "12345");
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MinScannedBytes = 11,
+                MaxScannedBytes = 6
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
+                files.Add(file);
+
+            Assert.Equal(2, files.Count);
+            Assert.Equal(["A_keep.jpg", "B_keep.jpg"], files.Select(x => x.RelativePath));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DiscoveryAppliesWildcardFiltersBeforeMatchedFileLimit()
     {
         var root = NewTempDir();
