@@ -1,5 +1,4 @@
 using MediaToolsNext.Core;
-using MediaToolsNext.Desktop;
 
 namespace MediaToolsNext.Desktop.Tests;
 

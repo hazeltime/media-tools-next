@@ -1,3 +1,4 @@
+using MediaToolsNext.Core;
 using MediaToolsNext.Infrastructure;
 using Microsoft.Extensions.Logging;
 

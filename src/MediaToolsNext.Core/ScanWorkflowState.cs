@@ -1,8 +1,7 @@
-using MediaToolsNext.Core;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
-namespace MediaToolsNext.Desktop;
+namespace MediaToolsNext.Core;
 
 public sealed class ScanWorkflowState
 {
