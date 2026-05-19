@@ -1071,14 +1071,14 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
 .tool-status-card p { color: var(--c-text); font-size: 12px; min-height: 32px; }
 .tool-status-card small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-state {
-    border: 1px solid rgba(15,31,45,.12);
+    border: 1px solid var(--c-border-soft);
     border-radius: 999px;
     font-size: 11px;
     font-weight: 800;
     padding: 2px 8px;
 }
-.tool-state.ok { background: #d9fbe8; color: #14532d; }
-.tool-state.missing { background: #ffe1e1; color: #8f1111; }
+.tool-state.ok { background: var(--c-success-bg); color: var(--c-success); }
+.tool-state.missing { background: var(--c-danger-bg); color: var(--c-danger); }
 
 /* Context actions panel (per-tab) */
 .context-actions h2 { font-size: 15px; margin-bottom: var(--gap-sm); }
@@ -1098,7 +1098,7 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
 }
 .help-panel pre      { background: #f1f5f9; border-radius: var(--radius-sm); font-size: 13px; overflow-x: auto; padding: 10px 14px; }
 .help-panel code     { font-family: Consolas, monospace; font-size: 13px; }
-a, .btn-link { color: #006bb7; }
+a, .btn-link { color: var(--c-info); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    History page
