@@ -134,6 +134,14 @@ public sealed class ScannerPipeline(
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(150 * (attempt + 1)), cancellationToken);
             }
+            catch (MoveDeleteFailedException ex)
+            {
+                return new FileActionOutcome(
+                    "move-delete-failed: " + ex.InnerException?.GetType().Name + ": " + ex.InnerException?.Message,
+                    ex.PrimaryTargetPath,
+                    ex.BackupTargetPath,
+                    null);
+            }
             catch (Exception ex)
             {
                 return new FileActionOutcome("error: " + ex.GetType().Name + ": " + ex.Message, null, null, null);

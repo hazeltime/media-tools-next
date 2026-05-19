@@ -4,6 +4,7 @@
 @inject FolderPickerService Picker
 @inject IReportExporter CsvExporter
 @inject NavigationManager Nav
+@inject IFileActionService ActionService
 @implements IDisposable
 
 <div class="page-stack results-workspace" tabindex="0" @onkeydown="HandleKeyAsync">
@@ -517,53 +518,71 @@
         State.Message = $"{operation}ing {selected.Count:N0} files...";
         State.NotifyChanged();
 
-        var written = await Task.Run(() =>
+        var copied = 0;
+        var moved = 0;
+        var skipped = 0;
+        var failed = 0;
+
+        await Task.Run(async () =>
         {
-            var count = 0;
+            var options = State.BuildOptions() with
+            {
+                TargetRoot = destination,
+                ActionMode = ScanActionMode.CopySorted,
+                ActionOperation = operation,
+                OutputGrouping = OutputGrouping.None,
+                OutputPathLayout = layout
+            };
+
             foreach (var row in selected)
             {
-                if (!File.Exists(row.Candidate.FullPath)) continue;
-                var target = BuildManualTarget(destination, row, layout);
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                target = GetSafePath(target);
+                try
+                {
+                    var outcome = new ValidationOutcome(
+                        row.Candidate,
+                        row.Status,
+                        row.Validator,
+                        row.Detail,
+                        TimeSpan.Zero);
 
-                if (operation == FileActionOperation.Copy)
-                {
-                    File.Copy(row.Candidate.FullPath, target);
+                    var result = await ActionService.ApplyAsync(outcome, options, CancellationToken.None);
+                    if (result.Action == "copied")
+                    {
+                        copied++;
+                    }
+                    else if (result.Action == "moved")
+                    {
+                        moved++;
+                    }
+                    else if (result.Action == "not-written-status-filter" || result.Action == "dry-run")
+                    {
+                        skipped++;
+                    }
+                    else
+                    {
+                        skipped++;
+                    }
                 }
-                else
+                catch (MoveDeleteFailedException)
                 {
-                    File.Move(row.Candidate.FullPath, target);
+                    failed++;
                 }
-                count++;
+                catch (Exception)
+                {
+                    failed++;
+                }
             }
-            return count;
         });
 
-        State.Message = $"{operation} completed for {written:N0} selected files.";
-        State.NotifyChanged();
-    }
-
-    private static string BuildManualTarget(string root, ScanResultRecord row, OutputPathLayout layout)
-    {
-        var relative = layout == OutputPathLayout.Flat ? Path.GetFileName(row.Candidate.RelativePath) : row.Candidate.RelativePath;
-        var parts = relative
-            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
-        return Path.Combine([root, .. parts]);
-    }
-
-    private static string GetSafePath(string target)
-    {
-        if (!File.Exists(target)) return target;
-        var dir = Path.GetDirectoryName(target)!;
-        var name = Path.GetFileNameWithoutExtension(target);
-        var ext = Path.GetExtension(target);
-        for (var i = 1; ; i++)
+        if (operation == FileActionOperation.Move)
         {
-            var candidate = Path.Combine(dir, $"{name}_{i}{ext}");
-            if (!File.Exists(candidate)) return candidate;
+            State.Message = $"Move completed: {moved:N0} moved, {skipped:N0} skipped, {failed:N0} failed.";
         }
+        else
+        {
+            State.Message = $"Copy completed: {copied:N0} copied, {skipped:N0} skipped, {failed:N0} failed.";
+        }
+        State.NotifyChanged();
     }
 
     private async Task PreviewImageAsync(ScanResultRecord row)

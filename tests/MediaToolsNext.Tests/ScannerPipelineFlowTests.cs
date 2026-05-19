@@ -276,6 +276,44 @@ public class ScannerPipelineFlowTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task MovePermanentDeleteFailurePreservesPathsAndErrorDetail()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            File.WriteAllText(source, "hello");
+            var db = Path.Combine(root, "state.db");
+            var store = new SqliteScanStore(db);
+            var pipeline = new ScannerPipeline(
+                new FileDiscoverer(),
+                new ValidatorRegistry([new CountingValidator()]),
+                new FileActionService(path => throw new IOException("locked-file")),
+                store,
+                new ScanControl());
+
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                ActionOperation = FileActionOperation.Move,
+                MaxRetries = 1
+            };
+
+            var summary = await pipeline.RunAsync(options, null, CancellationToken.None);
+            var results = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
+
+            Assert.Single(results);
+            var result = results[0];
+            Assert.StartsWith("move-delete-failed: IOException: locked-file", result.Action);
+            Assert.Equal(Path.Combine(root, "target", "valid", "a.txt"), result.PrimaryTargetPath);
+            Assert.True(File.Exists(source), "Source file should still exist since delete failed");
+            Assert.True(File.Exists(result.PrimaryTargetPath), "Target file should exist since copy succeeded");
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class CountingValidator : IMediaValidator
     {
         public int Calls { get; private set; }

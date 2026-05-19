@@ -18,6 +18,10 @@
                 <p class="muted">The app probes these commands directly. Refresh after install or upgrade if PATH changed.</p>
             </div>
             <div class="action-bar">
+                @if (IsBusy)
+                {
+                    <button class="danger" @onclick="CancelOperation">Cancel operation</button>
+                }
                 <button class="secondary" disabled="@IsBusy" @onclick="RefreshTools">Refresh status</button>
                 <button disabled="@IsBusy" @onclick="UpgradeAllAsync">Check and upgrade all</button>
             </div>
@@ -57,6 +61,7 @@
     private string? _message;
     private IReadOnlyList<ToolStatus> _toolStatuses = [];
     private bool IsBusy => _installing is not null || _upgrading is not null;
+    private CancellationTokenSource? _installCts;
 
     protected override void OnInitialized()
     {
@@ -91,22 +96,60 @@
         _toolStatuses = ToolProbe.GetStatuses();
     }
 
+    private void CancelOperation()
+    {
+        _installCts?.Cancel();
+        _message = "Cancelling operation...";
+    }
+
+    private async Task<string> SaveLogIfNeededAsync(string action, string toolName, string output)
+    {
+        if (output.Length <= 500) return TrimOutput(output);
+
+        try
+        {
+            var appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "logs");
+            Directory.CreateDirectory(appData);
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var filename = $"tool-{action}-{toolName}-{timestamp}.log";
+            var logPath = Path.Combine(appData, filename);
+            await File.WriteAllTextAsync(logPath, output);
+            return $"{output[..500]}...\n[Full log saved to: {logPath}]";
+        }
+        catch (Exception ex)
+        {
+            return $"{output[..500]}...\n[Failed to save full log: {ex.Message}]";
+        }
+    }
+
     private async Task InstallAsync(string toolName)
     {
         _installing = toolName;
         _message = $"Installing {toolName}...";
+        _installCts = new CancellationTokenSource();
         try
         {
-            var result = await Installer.InstallAsync(toolName, CancellationToken.None);
+            var result = await Installer.InstallAsync(toolName, _installCts.Token);
+            var outputMsg = await SaveLogIfNeededAsync("install", toolName, result.Output);
             _message = result.Success
                 ? $"Install command completed: {result.Command}. Refreshed tool status; restart the app if PATH still has not updated."
-                : $"Install failed: {result.Command}. {TrimOutput(result.Output)}";
+                : $"Install failed: {result.Command}. {outputMsg}";
             ToolProbe.Refresh();
             LoadToolStatuses();
+        }
+        catch (OperationCanceledException)
+        {
+            _message = "Installation cancelled.";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Installation error: {ex.Message}";
         }
         finally
         {
             _installing = null;
+            _installCts?.Dispose();
+            _installCts = null;
         }
     }
 
@@ -114,18 +157,30 @@
     {
         _upgrading = toolName;
         _message = $"Checking/upgrading {toolName}...";
+        _installCts = new CancellationTokenSource();
         try
         {
-            var result = await Installer.UpgradeAsync(toolName, CancellationToken.None);
+            var result = await Installer.UpgradeAsync(toolName, _installCts.Token);
+            var outputMsg = await SaveLogIfNeededAsync("upgrade", toolName, result.Output);
             _message = result.Success
-                ? $"Upgrade check completed: {result.Command}. {TrimOutput(result.Output)}"
-                : $"Upgrade check failed: {result.Command}. {TrimOutput(result.Output)}";
+                ? $"Upgrade check completed: {result.Command}. {outputMsg}"
+                : $"Upgrade check failed: {result.Command}. {outputMsg}";
             ToolProbe.Refresh();
             LoadToolStatuses();
+        }
+        catch (OperationCanceledException)
+        {
+            _message = "Upgrade cancelled.";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Upgrade error: {ex.Message}";
         }
         finally
         {
             _upgrading = null;
+            _installCts?.Dispose();
+            _installCts = null;
         }
     }
 
@@ -133,18 +188,30 @@
     {
         _upgrading = "*";
         _message = "Checking/upgrading all validator tools...";
+        _installCts = new CancellationTokenSource();
         try
         {
-            var result = await Installer.UpgradeAllAsync(_toolStatuses.Select(t => t.Name), CancellationToken.None);
+            var result = await Installer.UpgradeAllAsync(_toolStatuses.Select(t => t.Name), _installCts.Token);
+            var outputMsg = await SaveLogIfNeededAsync("upgrade-all", "all", result.Output);
             _message = result.Success
-                ? $"Upgrade checks completed. {TrimOutput(result.Output)}"
-                : $"One or more upgrade checks failed. {TrimOutput(result.Output)}";
+                ? $"Upgrade checks completed. {outputMsg}"
+                : $"One or more upgrade checks failed. {outputMsg}";
             ToolProbe.Refresh();
             LoadToolStatuses();
+        }
+        catch (OperationCanceledException)
+        {
+            _message = "Upgrade operation cancelled.";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Upgrade operation error: {ex.Message}";
         }
         finally
         {
             _upgrading = null;
+            _installCts?.Dispose();
+            _installCts = null;
         }
     }
 

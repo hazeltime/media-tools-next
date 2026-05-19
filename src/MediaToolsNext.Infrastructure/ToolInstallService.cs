@@ -106,9 +106,13 @@ public sealed class ProcessToolInstallRunner : IToolInstallProcessRunner
             {
                 await process.WaitForExitAsync(timeoutCts.Token);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 KillProcessTree(process);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 return new(false, commandText, $"Timed out after {timeout.TotalMinutes:N0} minutes.");
             }
 

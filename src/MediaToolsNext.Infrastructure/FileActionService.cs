@@ -24,9 +24,12 @@ public sealed class FileActionService : IFileActionService
         if (options.ActionStatuses is { Count: > 0 } statuses && !statuses.Contains(outcome.Status))
             return new FileActionOutcome("not-written-status-filter", null, null, null);
 
-        var groupFolder = options.OutputGrouping == OutputGrouping.MediaCategory
-            ? outcome.Candidate.Category.ToString().ToLowerInvariant()
-            : StatusFolder(outcome.Status);
+        var groupFolder = options.OutputGrouping switch
+        {
+            OutputGrouping.MediaCategory => outcome.Candidate.Category.ToString().ToLowerInvariant(),
+            OutputGrouping.None => string.Empty,
+            _ => StatusFolder(outcome.Status)
+        };
         var outputPath = options.OutputPathLayout == OutputPathLayout.Flat
             ? Path.GetFileName(outcome.Candidate.RelativePath)
             : outcome.Candidate.RelativePath;
@@ -62,7 +65,11 @@ public sealed class FileActionService : IFileActionService
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                action = "move-delete-failed: " + ex.GetType().Name + ": " + ex.Message;
+                throw new MoveDeleteFailedException(
+                    "Failed to delete source file after copy during move operation: " + ex.Message,
+                    ex,
+                    primaryTarget,
+                    backupTarget);
             }
         }
 
@@ -87,12 +94,41 @@ public sealed class FileActionService : IFileActionService
         var ext  = Path.GetExtension(target);
         Directory.CreateDirectory(dir);
 
+        var sourceInfo = new FileInfo(source);
+        var sourceLength = sourceInfo.Length;
+        var sourceWriteTime = sourceInfo.LastWriteTimeUtc;
+
         for (var i = 0; ; i++)
         {
             var candidate = i == 0 ? target : Path.Combine(dir, $"{name}_{i}{ext}");
+
+            if (File.Exists(candidate))
+            {
+                try
+                {
+                    var candInfo = new FileInfo(candidate);
+                    if (candInfo.Length == sourceLength && candInfo.LastWriteTimeUtc == sourceWriteTime)
+                    {
+                        return candidate; // Already copied!
+                    }
+                }
+                catch
+                {
+                    // Ignore errors reading candidate info and proceed
+                }
+            }
+
             try
             {
                 await CopyAsync(source, candidate, copyBufferBytes, cancellationToken);
+                try
+                {
+                    File.SetLastWriteTimeUtc(candidate, sourceWriteTime);
+                }
+                catch
+                {
+                    // Ignore failures to set the write time (e.g. read-only filesystem or locking indexers)
+                }
                 return candidate;
             }
             catch (IOException ex) when (IsAlreadyExists(ex))
@@ -118,22 +154,70 @@ public sealed class FileActionService : IFileActionService
         Directory.CreateDirectory(primaryDir);
         Directory.CreateDirectory(backupDir);
 
+        var sourceInfo = new FileInfo(source);
+        var sourceLength = sourceInfo.Length;
+        var sourceWriteTime = sourceInfo.LastWriteTimeUtc;
+
         for (var i = 0; ; i++)
         {
             var primaryCandidate = i == 0 ? primaryTarget : Path.Combine(primaryDir, $"{primaryName}_{i}{primaryExt}");
             var backupCandidate = i == 0 ? backupTarget : Path.Combine(backupDir, $"{backupName}_{i}{backupExt}");
-            try
+
+            // Check if both already exist and match the source
+            var primaryOk = false;
+            if (File.Exists(primaryCandidate))
             {
-                await CopyAsync(source, primaryCandidate, copyBufferBytes, cancellationToken);
-            }
-            catch (IOException ex) when (IsAlreadyExists(ex))
-            {
-                continue;
+                try
+                {
+                    var pInfo = new FileInfo(primaryCandidate);
+                    if (pInfo.Length == sourceLength && pInfo.LastWriteTimeUtc == sourceWriteTime)
+                    {
+                        primaryOk = true;
+                    }
+                }
+                catch { }
             }
 
+            if (primaryOk && File.Exists(backupCandidate))
+            {
+                try
+                {
+                    var bInfo = new FileInfo(backupCandidate);
+                    if (bInfo.Length == sourceLength && bInfo.LastWriteTimeUtc == sourceWriteTime)
+                    {
+                        return (primaryCandidate, backupCandidate); // Already copied to both!
+                    }
+                }
+                catch { }
+            }
+
+            // If primary is not yet copied, copy it
+            if (!primaryOk)
+            {
+                try
+                {
+                    await CopyAsync(source, primaryCandidate, copyBufferBytes, cancellationToken);
+                    try
+                    {
+                        File.SetLastWriteTimeUtc(primaryCandidate, sourceWriteTime);
+                    }
+                    catch { }
+                }
+                catch (IOException ex) when (IsAlreadyExists(ex))
+                {
+                    continue;
+                }
+            }
+
+            // Copy primary to backup
             try
             {
                 await CopyAsync(primaryCandidate, backupCandidate, copyBufferBytes, cancellationToken);
+                try
+                {
+                    File.SetLastWriteTimeUtc(backupCandidate, sourceWriteTime);
+                }
+                catch { }
                 return (primaryCandidate, backupCandidate);
             }
             catch (IOException ex) when (IsAlreadyExists(ex))
@@ -204,5 +288,18 @@ public sealed class FileActionService : IFileActionService
     {
         var code = ex.HResult & 0xFFFF;
         return code is 17 or 80 or 183;
+    }
+}
+
+public sealed class MoveDeleteFailedException : IOException
+{
+    public string PrimaryTargetPath { get; }
+    public string? BackupTargetPath { get; }
+
+    public MoveDeleteFailedException(string message, Exception innerException, string primaryTargetPath, string? backupTargetPath)
+        : base(message, innerException)
+    {
+        PrimaryTargetPath = primaryTargetPath;
+        BackupTargetPath = backupTargetPath;
     }
 }
