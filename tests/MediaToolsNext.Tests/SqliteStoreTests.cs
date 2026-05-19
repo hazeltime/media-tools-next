@@ -94,9 +94,7 @@ public class SqliteStoreTests
         var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
         await store.InitializeAsync(CancellationToken.None);
         var oldest = await store.CreateSessionAsync(options, CancellationToken.None);
-        await Task.Delay(TimeSpan.FromSeconds(1.1));
         var middle = await store.CreateSessionAsync(options, CancellationToken.None);
-        await Task.Delay(TimeSpan.FromSeconds(1.1));
         var newest = await store.CreateSessionAsync(options, CancellationToken.None);
 
         var sessions = await store.ListSessionsAsync(2, CancellationToken.None);
@@ -105,9 +103,32 @@ public class SqliteStoreTests
         Assert.DoesNotContain(sessions, x => x.SessionId == oldest);
     }
 
-    private static ScanResultRecord CreateRecord(Guid session, string root, string fileName, ValidationStatus status)
+    [Fact]
+    public async Task ListResultsPreservesInsertionOrderForEqualTimestamps()
+    {
+        using var temp = TestTempDirectory.Create();
+        var db = Path.Combine(temp.Path, "state.db");
+        var store = new SqliteScanStore(db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var timestamp = DateTimeOffset.Parse("2026-05-19T12:00:00Z");
+        await store.InitializeAsync(CancellationToken.None);
+        var session = await store.CreateSessionAsync(options, CancellationToken.None);
+        var records = new[]
+        {
+            CreateRecord(session, temp.Path, "first.txt", ValidationStatus.Valid, timestamp),
+            CreateRecord(session, temp.Path, "second.txt", ValidationStatus.Valid, timestamp),
+            CreateRecord(session, temp.Path, "third.txt", ValidationStatus.Valid, timestamp)
+        };
+
+        await store.BatchSaveResultsAsync(records, CancellationToken.None);
+
+        var listed = await store.ListResultsAsync(session, CancellationToken.None);
+        Assert.Equal(["first.txt", "second.txt", "third.txt"], listed.Select(x => x.Candidate.RelativePath).ToArray());
+    }
+
+    private static ScanResultRecord CreateRecord(Guid session, string root, string fileName, ValidationStatus status, DateTimeOffset? timestamp = null)
     {
         var candidate = new FileCandidate(Path.Combine(root, fileName), fileName, ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
-        return new ScanResultRecord(session, candidate, status, "test", null, "dry-run", null, null, DateTimeOffset.UtcNow);
+        return new ScanResultRecord(session, candidate, status, "test", null, "dry-run", null, null, timestamp ?? DateTimeOffset.UtcNow);
     }
 }

@@ -5,7 +5,7 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class SqliteScanStore(string databasePath) : IScanStore
 {
-    private const string TimestampFormat = "yyyy-MM-ddTHH:mm:ssZ";
+    private const string TimestampFormat = "O";
 
     private readonly string _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
     private string ConnectionString => _connectionString;
@@ -142,7 +142,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         await connection.OpenAsync(cancellationToken);
         await ConfigureConnectionAsync(connection, cancellationToken);
         var command = connection.CreateCommand();
-        command.CommandText = "SELECT * FROM results WHERE session_id = $session ORDER BY timestamp_utc";
+        command.CommandText = "SELECT * FROM results WHERE session_id = $session ORDER BY timestamp_utc, rowid";
         command.Parameters.AddWithValue("$session", sessionId.ToString());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -160,7 +160,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         command.CommandText = """
             SELECT id, source_path, target_root, backup_root, action_mode, started_utc
             FROM sessions
-            ORDER BY started_utc DESC
+            ORDER BY started_utc DESC, rowid DESC
             LIMIT $take
             """;
         command.Parameters.AddWithValue("$take", Math.Max(1, take));
