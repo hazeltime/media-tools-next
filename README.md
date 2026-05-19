@@ -109,7 +109,7 @@ dotnet test tests\MediaToolsNext.Desktop.Tests\MediaToolsNext.Desktop.Tests.cspr
 dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0-windows10.0.19041.0 --no-restore
 git diff --check
 git commit -m "<focused change>"
-git push origin main
+git push -u origin <branch>
 ```
 
 Run narrower tests first when a change is local to one component, then run the broader checks before pushing.
