@@ -21,6 +21,9 @@ function Invoke-Step {
     Write-Host "==> $Name" -ForegroundColor Cyan
     Write-Host ($Command -join " ") -ForegroundColor DarkGray
     & $Command[0] @($Command | Select-Object -Skip 1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Name failed with exit code $LASTEXITCODE."
+    }
 }
 
 Set-Location $repoRoot
