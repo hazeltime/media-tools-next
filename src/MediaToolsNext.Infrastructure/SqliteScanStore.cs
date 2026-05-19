@@ -146,7 +146,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         SqliteTransaction? tx = null)
     {
         var command = connection.CreateCommand();
-        if (tx is not null) command.Transaction = tx;
+        if (tx is not null) command.Transaction = (SqliteTransaction)tx;
         command.CommandText = """
             INSERT INTO results VALUES (
                 $session,$full,$relative,$ext,$category,$size,$lastWrite,$status,$validator,$detail,
