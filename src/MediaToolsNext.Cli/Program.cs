@@ -123,48 +123,77 @@ if (args.Contains("--preview"))
 // -----------------------------------------------------------------------
 // Run pipeline
 // -----------------------------------------------------------------------
-var store = new SqliteScanStore(options.DatabasePath);
-var pipeline = new ScannerPipeline(
-    new FileDiscoverer(),
-    new ValidatorRegistry([
-        new ImageValidator(tools),
-        new MediaStreamValidator(MediaCategory.Video, tools),
-        new MediaStreamValidator(MediaCategory.Audio, tools),
-        new DocumentValidator(tools)
-    ]),
-    new FileActionService(),
-    store,
-    new ScanControl());
-
-var metrics  = new ScanPerformanceTracker();
-var progress = new Progress<ScanResultRecord>(r =>
-{
-    var current = metrics.Add(r);
-    Console.WriteLine($"{r.Status,-7} {r.Candidate.Category,-8} {current.FilesPerSecond:N1} files/s {current.MegabytesPerSecond:N1} MB/s {r.Candidate.RelativePath}");
-});
-
-ScanSummary summary;
 try
 {
-    summary = await pipeline.RunAsync(options, progress, cancellationToken);
+    var store = new SqliteScanStore(options.DatabasePath);
+    var pipeline = new ScannerPipeline(
+        new FileDiscoverer(),
+        new ValidatorRegistry([
+            new ImageValidator(tools),
+            new MediaStreamValidator(MediaCategory.Video, tools),
+            new MediaStreamValidator(MediaCategory.Audio, tools),
+            new DocumentValidator(tools)
+        ]),
+        new FileActionService(),
+        store,
+        new ScanControl());
+
+    var metrics  = new ScanPerformanceTracker();
+    var progress = new Progress<ScanResultRecord>(r =>
+    {
+        var current = metrics.Add(r);
+        Console.WriteLine($"{r.Status,-7} {r.Candidate.Category,-8} {current.FilesPerSecond:N1} files/s {current.MegabytesPerSecond:N1} MB/s {r.Candidate.RelativePath}");
+    });
+
+    var summary = await pipeline.RunAsync(options, progress, cancellationToken);
+
+    Console.WriteLine(
+        $"Done. total={summary.Total} valid={summary.Valid} corrupt={summary.Corrupt} " +
+        $"unknown={summary.Unknown} errors={summary.Errors} skipped={summary.Skipped}");
+    if (!string.IsNullOrEmpty(summary.CompletionReason))
+        Console.WriteLine($"Reason: {summary.CompletionReason}");
+
+    if (!string.IsNullOrWhiteSpace(exportPath))
+    {
+        var records = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
+        await new CsvReportExporter().ExportCsvAsync(records, exportPath, CancellationToken.None);
+        Console.WriteLine($"Exported CSV: {exportPath}");
+    }
 }
 catch (OperationCanceledException)
 {
     Console.WriteLine("Scan cancelled by user.");
-    return;
+    Environment.ExitCode = 130;
 }
-
-Console.WriteLine(
-    $"Done. total={summary.Total} valid={summary.Valid} corrupt={summary.Corrupt} " +
-    $"unknown={summary.Unknown} errors={summary.Errors} skipped={summary.Skipped}");
-if (!string.IsNullOrEmpty(summary.CompletionReason))
-    Console.WriteLine($"Reason: {summary.CompletionReason}");
-
-if (!string.IsNullOrWhiteSpace(exportPath))
+catch (Microsoft.Data.Sqlite.SqliteException ex)
 {
-    var records = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
-    await new CsvReportExporter().ExportCsvAsync(records, exportPath, CancellationToken.None);
-    Console.WriteLine($"Exported CSV: {exportPath}");
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("========================================");
+    Console.Error.WriteLine($"Database Error: {ex.Message} (Error Code: {ex.SqliteErrorCode})");
+    Console.Error.WriteLine("Guidance: Ensure that the database file is not open in another SQLite client,");
+    Console.Error.WriteLine("that you have sufficient read/write permissions to the database file and directory,");
+    Console.Error.WriteLine($"and that the database path '{options.DatabasePath}' is valid.");
+    Console.Error.WriteLine("========================================");
+    Environment.ExitCode = 3;
+}
+catch (IOException ex)
+{
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("========================================");
+    Console.Error.WriteLine($"I/O Error: {ex.Message}");
+    Console.Error.WriteLine("Guidance: Verify that the source/target folders exist, are accessible,");
+    Console.Error.WriteLine("and are not locked by another process (e.g. anti-virus, indexing services).");
+    Console.Error.WriteLine("========================================");
+    Environment.ExitCode = 4;
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("========================================");
+    Console.Error.WriteLine($"Unexpected Error: {ex.Message}");
+    Console.Error.WriteLine(ex.StackTrace);
+    Console.Error.WriteLine("========================================");
+    Environment.ExitCode = 5;
 }
 
 // -----------------------------------------------------------------------
