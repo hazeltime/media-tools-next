@@ -60,6 +60,7 @@ dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --concurrency <
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --probe-seconds <10-600>
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --tool-timeout-seconds <5-600>
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --export results.csv
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --health
 ```
 
 Without `--live`, no files are copied.
@@ -67,6 +68,7 @@ If `--concurrency` is omitted, the CLI uses the hardware tuner recommendation. E
 If `--probe-seconds` is omitted, the CLI uses the hardware tuner recommendation.
 If `--profile` is omitted, the CLI uses `deep-images`, which performs the in-depth image check. The external tool timeout defaults to 15 seconds unless overridden.
 Use `--flat`, `--move`, and `--group-category` to change write layout and operation in live modes.
+Use `--health` to check source, target, database folder, and external tools without scanning.
 
 ## Desktop
 

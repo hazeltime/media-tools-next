@@ -19,7 +19,7 @@ var cancellationToken = cts.Token;
 // -----------------------------------------------------------------------
 if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
 {
-    Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [--backup <path>] [--live] [--move] [--flat] [--group-category] [--db <path>] [--concurrency <n>] [--probe-seconds <n>] [--profile <name>]");
+    Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [--backup <path>] [--live] [--move] [--flat] [--group-category] [--db <path>] [--concurrency <n>] [--probe-seconds <n>] [--tool-timeout-seconds <n>] [--profile <name>] [--preview] [--health]");
     Console.WriteLine();
     Console.WriteLine("Profiles:");
     foreach (var p in ScanProfiles.All)
@@ -50,6 +50,16 @@ foreach (var tool in tools.GetStatuses())
     Console.WriteLine($"  {tool.Name,-10} {(tool.IsAvailable ? tool.Path : "missing")}");
 
 Console.WriteLine($"Auto tuning: concurrency={options.MaxConcurrency}, probeSeconds={options.MediaProbeSeconds}, buffer={options.CopyBufferBytes:N0} bytes, {hardwareProfile.Rationale}");
+
+// -----------------------------------------------------------------------
+// Health mode
+// -----------------------------------------------------------------------
+if (args.Contains("--health"))
+{
+    var healthy = await RunHealthCheckAsync(options, tools, cancellationToken);
+    Environment.ExitCode = healthy ? 0 : 1;
+    return;
+}
 
 // -----------------------------------------------------------------------
 // Preview mode
@@ -118,4 +128,66 @@ string? ValueAfter(string name)
 {
     var index = Array.IndexOf(args, name);
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+}
+
+static async Task<bool> RunHealthCheckAsync(ScanOptions options, ExternalToolProbe tools, CancellationToken cancellationToken)
+{
+    Console.WriteLine("Health check:");
+    var healthy = true;
+
+    if (Directory.Exists(options.SourcePath))
+    {
+        Console.WriteLine($"  OK source exists: {options.SourcePath}");
+    }
+    else
+    {
+        Console.WriteLine($"  FAIL source folder is missing: {options.SourcePath}");
+        healthy = false;
+    }
+
+    if (Directory.Exists(options.TargetRoot))
+    {
+        var probeFile = Path.Combine(options.TargetRoot, ".media-tools-next-write-test-" + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            await File.WriteAllTextAsync(probeFile, "test", cancellationToken);
+            File.Delete(probeFile);
+            Console.WriteLine($"  OK target is writable: {options.TargetRoot}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"  FAIL target is not writable: {ex.Message}");
+            healthy = false;
+        }
+    }
+    else
+    {
+        Console.WriteLine($"  FAIL target folder is missing: {options.TargetRoot}");
+        healthy = false;
+    }
+
+    var dbDir = Path.GetDirectoryName(Path.GetFullPath(options.DatabasePath));
+    if (!string.IsNullOrWhiteSpace(dbDir))
+    {
+        try
+        {
+            Directory.CreateDirectory(dbDir);
+            Console.WriteLine($"  OK database folder is available: {dbDir}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"  FAIL database folder is not available: {ex.Message}");
+            healthy = false;
+        }
+    }
+
+    foreach (var tool in tools.GetStatuses())
+    {
+        var status = tool.IsAvailable ? "OK" : "WARN";
+        var detail = tool.IsAvailable ? tool.Path : "missing; validation may be less complete";
+        Console.WriteLine($"  {status} {tool.Name}: {detail}");
+    }
+
+    Console.WriteLine(healthy ? "Health check passed." : "Health check failed.");
+    return healthy;
 }
