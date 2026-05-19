@@ -308,7 +308,7 @@
                     }
                     @if (!rows.Any())
                     {
-                        <tr><td colspan="6" class="empty-cell">No results match the current filter.</td></tr>
+                        <tr><td colspan="7" class="empty-cell">No results match the current filter.</td></tr>
                     }
                 </tbody>
             </table>;
@@ -444,28 +444,19 @@
 
     private async Task CopyPathsForStatus(ValidationStatus status)
     {
-        var paths = FilterRows(status)
+        var paths = _visibleRows
+            .Where(r => r.Status == status)
             .Select(r => r.Candidate.FullPath);
+        var copiedCount = paths.Count();
         try
         {
             await Microsoft.Maui.ApplicationModel.DataTransfer.Clipboard.Default
                 .SetTextAsync(string.Join(Environment.NewLine, paths));
-            State.Message = $"Copied {_filteredCount:N0} visible {status} paths to clipboard.";
+            State.Message = $"Copied {copiedCount:N0} visible {status} paths to clipboard.";
         }
         catch { State.Message = "Clipboard not available in this context."; }
         State.NotifyChanged();
     }
-
-    private IEnumerable<ScanResultRecord> FilterRows(ValidationStatus status) =>
-        State.Results.Where(r =>
-        {
-            if (r.Status != status) return false;
-            if (string.IsNullOrWhiteSpace(_searchText)) return true;
-            return r.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-                || r.Candidate.FullPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-                || (r.Detail?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
-                || r.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
-        });
 
     private bool IsPageSelected => _pagedRows.Count > 0 && _pagedRows.All(r => _selectedKeys.Contains(RowKey(r)));
     private static string RowKey(ScanResultRecord row) => row.Candidate.FullPath + "|" + row.TimestampUtc.ToUnixTimeMilliseconds();

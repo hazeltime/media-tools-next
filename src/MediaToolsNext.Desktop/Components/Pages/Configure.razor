@@ -136,7 +136,7 @@
             @if (State.EnableImages)
             {
                 <div class="cfg-subsection">
-                    <h3>Custom image types &amp; include filters</h3>
+                    <h3>Custom image types</h3>
                     <div class="form-grid two">
                         <label>
                             Extra image extensions
@@ -150,23 +150,27 @@
                             </small>
                             <input @bind="State.CustomImageRegex" />
                         </label>
-                        <label>
-                            Include filename wildcards
-                            <small>Example: IMG_* *.jpg</small>
-                            <textarea rows="3" @bind="State.IncludePatternsText" />
-                        </label>
-                        <label>
-                            Exclude filename wildcards
-                            <small>Example: thumb_* *_small.*</small>
-                            <textarea rows="3" @bind="State.ExcludePatternsText" />
-                        </label>
                     </div>
                 </div>
+            }
+
+            <div class="cfg-subsection">
+                <h3>Global file filters</h3>
                 <div class="form-grid two">
+                    <label>
+                        Include filename wildcards
+                        <small>Example: IMG_* *.jpg</small>
+                        <textarea rows="3" @bind="State.IncludePatternsText" />
+                    </label>
+                    <label>
+                        Exclude filename wildcards
+                        <small>Example: thumb_* *_small.*</small>
+                        <textarea rows="3" @bind="State.ExcludePatternsText" />
+                    </label>
                     <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
                     <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>
                 </div>
-            }
+            </div>
         </div>
     </section>
 

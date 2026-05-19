@@ -39,7 +39,8 @@ public sealed record ScanOptions(
     FileActionOperation ActionOperation = FileActionOperation.Copy,
     OutputGrouping OutputGrouping = OutputGrouping.Status,
     OutputPathLayout OutputPathLayout = OutputPathLayout.PreserveRelativePath,
-    IReadOnlySet<string>? EnabledExtensions = null)
+    IReadOnlySet<string>? EnabledExtensions = null,
+    int CopyBufferBytes = 1024 * 1024)
 {
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
         new(

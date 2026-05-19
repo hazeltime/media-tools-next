@@ -6,9 +6,9 @@ namespace MediaToolsNext.Desktop;
 
 public sealed class ScanWorkflowState
 {
-    public string SourcePath { get; set; } = @"E:\q";
-    public string TargetRoot { get; set; } = @"E:\_output_";
-    public string? BackupRoot { get; set; } = @"G:\_backup_";
+    public string SourcePath { get; set; } = string.Empty;
+    public string TargetRoot { get; set; } = string.Empty;
+    public string? BackupRoot { get; set; }
     public ScanActionMode Mode { get; set; } = ScanActionMode.DryRun;
     public FileActionOperation ActionOperation { get; set; } = FileActionOperation.Copy;
     public OutputGrouping OutputGrouping { get; set; } = OutputGrouping.Status;

@@ -205,6 +205,40 @@ public class ScannerPipelineFlowTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task PipelineRecordsAccessDeniedStubAsError()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            var db = Path.Combine(root, "state.db");
+            var candidate = new FileCandidate(
+                Path.Combine(root, "restricted"),
+                "restricted",
+                string.Empty,
+                MediaCategory.Unknown,
+                0,
+                DateTimeOffset.MinValue);
+            var store = new SqliteScanStore(db);
+            var pipeline = new ScannerPipeline(
+                new StubDiscoverer(candidate),
+                new ValidatorRegistry([]),
+                new FileActionService(),
+                store,
+                new ScanControl());
+
+            var summary = await pipeline.RunAsync(ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db), null, CancellationToken.None);
+            var results = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
+
+            Assert.Equal(1, summary.Errors);
+            Assert.Equal(0, summary.Skipped);
+            Assert.Equal(ValidationStatus.Error, results[0].Status);
+            Assert.Equal("access_denied", results[0].Detail);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private sealed class CountingValidator : IMediaValidator
     {
         public int Calls { get; private set; }
@@ -214,6 +248,22 @@ public class ScannerPipelineFlowTests
         {
             Calls++;
             return Task.FromResult(new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero));
+        }
+    }
+
+    private sealed class StubDiscoverer(params FileCandidate[] candidates) : IFileDiscoverer
+    {
+        public async IAsyncEnumerable<FileCandidate> DiscoverAsync(
+            ScanOptions options,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
+            IProgress<ScanDiscoveryEvent>? discoveryProgress = null)
+        {
+            foreach (var candidate in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return candidate;
+                await Task.Yield();
+            }
         }
     }
 

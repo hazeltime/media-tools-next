@@ -481,6 +481,62 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task CopySortedWritesDuplicateFlatNamesToDistinctTargetsInParallel()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var target = Path.Combine(root, "target");
+            var service = new FileActionService();
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                OutputPathLayout = OutputPathLayout.Flat
+            };
+
+            var outcomes = Enumerable.Range(0, 24)
+                .Select(i =>
+                {
+                    var sourceDir = Path.Combine(root, "source-" + i);
+                    Directory.CreateDirectory(sourceDir);
+                    var source = Path.Combine(sourceDir, "same.txt");
+                    File.WriteAllText(source, "content-" + i);
+                    var candidate = new FileCandidate(source, Path.Combine("source-" + i, "same.txt"), ".txt", MediaCategory.Document, 9, DateTimeOffset.UtcNow);
+                    return new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+                })
+                .ToArray();
+
+            var actions = await Task.WhenAll(outcomes.Select(outcome => service.ApplyAsync(outcome, options, CancellationToken.None)));
+
+            var targets = actions.Select(action => action.PrimaryTargetPath).ToArray();
+            Assert.Equal(outcomes.Length, targets.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.All(targets, path => Assert.True(File.Exists(path)));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task CopySortedRejectsTraversalInRelativePath()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, Path.Combine("..", "escape.txt"), ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted
+            };
+
+            await Assert.ThrowsAsync<ArgumentException>(() => new FileActionService().ApplyAsync(outcome, options, CancellationToken.None));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task MoveSortedDeletesSourceAfterTargetWrite()
     {
         var root = NewTempDir();

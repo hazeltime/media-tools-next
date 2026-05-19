@@ -94,8 +94,10 @@ public sealed class ScannerPipeline(
 
     private async Task<ScanResultRecord> ProcessCandidateAsync(Guid sessionId, FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
     {
-        var validator = validators.GetValidator(candidate.Category);
-        var outcome = validator is not null
+        var validator = IsAccessDeniedStub(candidate) ? null : validators.GetValidator(candidate.Category);
+        var outcome = IsAccessDeniedStub(candidate)
+            ? new ValidationOutcome(candidate, ValidationStatus.Error, "discovery", "access_denied", TimeSpan.Zero)
+            : validator is not null
             ? await ValidateWithRetryAsync(validator, candidate, options, cancellationToken)
             : new ValidationOutcome(candidate, ValidationStatus.Skipped, "none", "category_disabled", TimeSpan.Zero);
         var action = await ApplyWithRetryAsync(outcome, options, cancellationToken);
