@@ -1,11 +1,17 @@
 using System.Diagnostics;
 
-namespace MediaToolsNext.Desktop;
+namespace MediaToolsNext.Infrastructure;
 
 public sealed record ToolInstallResult(bool Success, string Command, string Output);
 
+public interface IToolInstallProcessRunner
+{
+    Task<ToolInstallResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken);
+}
+
 public sealed class ToolInstallService
 {
+    private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromMinutes(10);
     private static readonly IReadOnlyDictionary<string, (string Choco, string Winget)> Packages =
         new Dictionary<string, (string Choco, string Winget)>(StringComparer.OrdinalIgnoreCase)
         {
@@ -14,6 +20,15 @@ public sealed class ToolInstallService
             ["magick"] = ("imagemagick", "ImageMagick.ImageMagick"),
             ["qpdf"] = ("qpdf", "QPDF.QPDF")
         };
+
+    private readonly IToolInstallProcessRunner _runner;
+    private readonly TimeSpan _commandTimeout;
+
+    public ToolInstallService(IToolInstallProcessRunner? runner = null, TimeSpan? commandTimeout = null)
+    {
+        _runner = runner ?? new ProcessToolInstallRunner();
+        _commandTimeout = commandTimeout ?? DefaultCommandTimeout;
+    }
 
     public async Task<ToolInstallResult> InstallAsync(string toolName, CancellationToken cancellationToken)
     {
@@ -55,7 +70,13 @@ public sealed class ToolInstallService
         return new(success, "upgrade all", string.Join(Environment.NewLine + Environment.NewLine, results.Select(result => $"{result.Command}: {result.Output}")));
     }
 
-    private static async Task<ToolInstallResult> TryRunAsync(string fileName, string[] arguments, CancellationToken cancellationToken)
+    private async Task<ToolInstallResult> TryRunAsync(string fileName, string[] arguments, CancellationToken cancellationToken) =>
+        await _runner.RunAsync(fileName, arguments, _commandTimeout, cancellationToken);
+}
+
+public sealed class ProcessToolInstallRunner : IToolInstallProcessRunner
+{
+    public async Task<ToolInstallResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var commandText = fileName + " " + string.Join(" ", arguments);
         try
@@ -76,14 +97,34 @@ public sealed class ToolInstallService
                 process.StartInfo.ArgumentList.Add(argument);
 
             process.Start();
-            var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(timeout);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                KillProcessTree(process);
+                return new(false, commandText, $"Timed out after {timeout.TotalMinutes:N0} minutes.");
+            }
+
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
             return new(process.ExitCode == 0, commandText, (stdout + stderr).Trim());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new(false, commandText, ex.Message);
         }
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try { process.Kill(entireProcessTree: true); }
+        catch { }
     }
 }
