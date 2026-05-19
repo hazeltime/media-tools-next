@@ -23,7 +23,7 @@ public class ScannerPipelineFlowTests
                 new SqliteScanStore(db),
                 new ScanControl());
 
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db);
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"));
             await pipeline.RunAsync(options, null, CancellationToken.None);
             await pipeline.RunAsync(options, null, CancellationToken.None);
             await pipeline.RunAsync(options with { ForceRescan = true }, null, CancellationToken.None);
@@ -50,7 +50,7 @@ public class ScannerPipelineFlowTests
                 store,
                 new ScanControl());
 
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db);
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"));
             await pipeline.RunAsync(options, null, CancellationToken.None);
             var second = await pipeline.RunAsync(options, null, CancellationToken.None);
             var results = await store.ListResultsAsync(second.SessionId, CancellationToken.None);
@@ -81,7 +81,7 @@ public class ScannerPipelineFlowTests
                 new ScanControl());
 
             var summary = await pipeline.RunAsync(
-                ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+                ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
                 {
                     MaxRuntimeSeconds = 1,
                     LimitState = new ScanLimitState()
@@ -114,7 +114,7 @@ public class ScannerPipelineFlowTests
                 new ScanControl());
 
             var summary = await pipeline.RunAsync(
-                ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+                ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
                 {
                     MaxConcurrency = 1,
                     MaxRuntimeSeconds = 1,
@@ -150,7 +150,7 @@ public class ScannerPipelineFlowTests
                 new ScanControl());
 
             var summary = await pipeline.RunAsync(
-                ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+                ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
                 {
                     MaxMatchedFiles = 1,
                     LimitState = limitState
@@ -183,7 +183,7 @@ public class ScannerPipelineFlowTests
                 new SqliteScanStore(db),
                 new ScanControl());
 
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with { MaxConcurrency = 1 };
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with { MaxConcurrency = 1 };
             await pipeline.RunAsync(options, null, CancellationToken.None);
 
             Assert.Equal(1, validator.MaxObserved);
@@ -210,7 +210,7 @@ public class ScannerPipelineFlowTests
                 new SqliteScanStore(db),
                 new ScanControl());
 
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with { MaxConcurrency = 2 };
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with { MaxConcurrency = 2 };
             await pipeline.RunAsync(options, null, CancellationToken.None);
 
             Assert.InRange(validator.MaxObserved, 2, 2);
@@ -234,7 +234,7 @@ public class ScannerPipelineFlowTests
                 new SqliteScanStore(db),
                 new ScanControl());
 
-            var summary = await pipeline.RunAsync(ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db), null, CancellationToken.None);
+            var summary = await pipeline.RunAsync(ScanOptions.CreateDefault(root, Path.Combine(root, "target")), null, CancellationToken.None);
 
             Assert.Equal(1, summary.Skipped);
             Assert.Equal(0, summary.Unknown);
@@ -265,7 +265,7 @@ public class ScannerPipelineFlowTests
                 store,
                 new ScanControl());
 
-            var summary = await pipeline.RunAsync(ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db), null, CancellationToken.None);
+            var summary = await pipeline.RunAsync(ScanOptions.CreateDefault(root, Path.Combine(root, "target")), null, CancellationToken.None);
             var results = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
 
             Assert.Equal(1, summary.Errors);
@@ -294,7 +294,7 @@ public class ScannerPipelineFlowTests
                 store,
                 new ScanControl());
 
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Move,

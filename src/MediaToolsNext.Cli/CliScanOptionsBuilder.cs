@@ -6,7 +6,8 @@ public sealed record CliScanOptionsBuildResult(
     ScanOptions Options,
     ScanProfile Profile,
     string? ExportPath,
-    HardwareProfile HardwareProfile);
+    HardwareProfile HardwareProfile,
+    string DatabasePath);
 
 public static class CliScanOptionsBuilder
 {
@@ -76,7 +77,6 @@ public static class CliScanOptionsBuilder
             profile.EnableDocuments,
             concurrency,
             probeSeconds,
-            db,
             profile.ValidationDepth,
             MaxSearchedFiles: IntAfter(args, "--max-searched-files"),
             MaxMatchedFiles: IntAfter(args, "--max-matched-files"),
@@ -93,7 +93,7 @@ public static class CliScanOptionsBuilder
             OutputPathLayout: layout,
             CopyBufferBytes: hardwareProfile.RecommendedCopyBufferBytes);
 
-        return new CliScanOptionsBuildResult(options, profile, exportPath, hardwareProfile);
+        return new CliScanOptionsBuildResult(options, profile, exportPath, hardwareProfile, db);
     }
 
     private static string? ValueAfter(string[] args, string name)

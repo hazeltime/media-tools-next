@@ -86,6 +86,7 @@ catch (ArgumentException ex)
 }
 var options = build.Options;
 var exportPath = build.ExportPath;
+var databasePath = build.DatabasePath;
 
 // -----------------------------------------------------------------------
 // Tool probe
@@ -102,7 +103,7 @@ Console.WriteLine($"Auto tuning: concurrency={options.MaxConcurrency}, probeSeco
 // -----------------------------------------------------------------------
 if (args.Contains("--health"))
 {
-    var healthy = await RunHealthCheckAsync(options, tools, cancellationToken);
+    var healthy = await RunHealthCheckAsync(options, databasePath, tools, cancellationToken);
     Environment.ExitCode = healthy ? 0 : 1;
     return;
 }
@@ -125,7 +126,7 @@ if (args.Contains("--preview"))
 // -----------------------------------------------------------------------
 try
 {
-    var store = new SqliteScanStore(options.DatabasePath);
+    var store = new SqliteScanStore(databasePath);
     var pipeline = new ScannerPipeline(
         new FileDiscoverer(),
         new ValidatorRegistry([
@@ -172,7 +173,7 @@ catch (Microsoft.Data.Sqlite.SqliteException ex)
     Console.Error.WriteLine($"Database Error: {ex.Message} (Error Code: {ex.SqliteErrorCode})");
     Console.Error.WriteLine("Guidance: Ensure that the database file is not open in another SQLite client,");
     Console.Error.WriteLine("that you have sufficient read/write permissions to the database file and directory,");
-    Console.Error.WriteLine($"and that the database path '{options.DatabasePath}' is valid.");
+    Console.Error.WriteLine($"and that the database path '{databasePath}' is valid.");
     Console.Error.WriteLine("========================================");
     Environment.ExitCode = 3;
 }
@@ -220,7 +221,7 @@ static string GetVersion()
     return assembly.GetName().Version?.ToString() ?? "unknown";
 }
 
-static async Task<bool> RunHealthCheckAsync(ScanOptions options, ExternalToolProbe tools, CancellationToken cancellationToken)
+static async Task<bool> RunHealthCheckAsync(ScanOptions options, string databasePath, ExternalToolProbe tools, CancellationToken cancellationToken)
 {
     Console.WriteLine("Health check:");
     var healthy = true;
@@ -256,7 +257,7 @@ static async Task<bool> RunHealthCheckAsync(ScanOptions options, ExternalToolPro
         healthy = false;
     }
 
-    var dbDir = Path.GetDirectoryName(Path.GetFullPath(options.DatabasePath));
+    var dbDir = Path.GetDirectoryName(Path.GetFullPath(databasePath));
     if (!string.IsNullOrWhiteSpace(dbDir))
     {
         try

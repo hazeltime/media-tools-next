@@ -80,7 +80,6 @@ public class ExternalToolValidatorTests
             EnableDocuments: true,
             MaxConcurrency: 8,
             MediaProbeSeconds: 120,
-            DatabasePath: Path.Combine(Path.GetTempPath(), "media-tools-next-tests.db"),
             ValidationDepth: depth,
             ExternalToolTimeoutSeconds: 15);
 

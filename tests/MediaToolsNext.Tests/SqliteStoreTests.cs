@@ -11,7 +11,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         await store.InitializeAsync(CancellationToken.None);
         var session = await store.CreateSessionAsync(options, CancellationToken.None);
         var candidate = new FileCandidate(Path.Combine(temp.Path, "a.txt"), "a.txt", ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
@@ -27,7 +27,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         await store.InitializeAsync(CancellationToken.None);
         var session = await store.CreateSessionAsync(options, CancellationToken.None);
         var candidate = new FileCandidate(Path.Combine(temp.Path, "a.txt"), "a.txt", ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
@@ -44,7 +44,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         await store.InitializeAsync(CancellationToken.None);
         var session = await store.CreateSessionAsync(options, CancellationToken.None);
         var records = new[]
@@ -75,7 +75,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         await store.InitializeAsync(CancellationToken.None);
         var session = await store.CreateSessionAsync(options, CancellationToken.None);
 
@@ -91,7 +91,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         await store.InitializeAsync(CancellationToken.None);
         var oldest = await store.CreateSessionAsync(options, CancellationToken.None);
         var middle = await store.CreateSessionAsync(options, CancellationToken.None);
@@ -109,7 +109,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         var timestamp = DateTimeOffset.Parse("2026-05-19T12:00:00Z");
         await store.InitializeAsync(CancellationToken.None);
         var session = await store.CreateSessionAsync(options, CancellationToken.None);
@@ -132,7 +132,7 @@ public class SqliteStoreTests
         using var temp = TestTempDirectory.Create();
         var db = Path.Combine(temp.Path, "state.db");
         var store = new SqliteScanStore(db);
-        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"));
         await store.InitializeAsync(CancellationToken.None);
         var session = await store.CreateSessionAsync(options, CancellationToken.None);
 

@@ -13,7 +13,7 @@ public class ScanPreviewTests
         try
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite"));
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"));
             var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
             Assert.Equal(1, preview.TotalFiles);
             Assert.Equal(1, preview.TotalDirectories);
@@ -31,7 +31,7 @@ public class ScanPreviewTests
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "b.txt"), "hello");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with { MaxMatchedFiles = 1 };
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with { MaxMatchedFiles = 1 };
             var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
             Assert.Equal(1, preview.TotalFiles);
         }
@@ -48,7 +48,7 @@ public class ScanPreviewTests
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "b.txt"), "hello");
             var limitState = new ScanLimitState();
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with
             {
                 MaxMatchedFiles = 1,
                 LimitState = limitState
@@ -72,7 +72,7 @@ public class ScanPreviewTests
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "b.txt"), "hello");
             var limitState = new ScanLimitState();
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with
             {
                 MaxMatchedFiles = 1,
                 MinRuntimeBeforeLimitsSeconds = 1,
@@ -97,7 +97,7 @@ public class ScanPreviewTests
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "b.txt"), "hello");
             var limitState = new ScanLimitState();
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with
             {
                 MaxMatchedBytes = 1,
                 LimitState = limitState
@@ -121,7 +121,7 @@ public class ScanPreviewTests
             File.WriteAllText(Path.Combine(root, "a.txt"), "12345");
             File.WriteAllText(Path.Combine(root, "b.txt"), "12345");
             var limitState = new ScanLimitState();
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with
             {
                 MinMatchedBytes = 5,
                 MaxMatchedBytes = 6,
@@ -146,7 +146,7 @@ public class ScanPreviewTests
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "12345");
             File.WriteAllText(Path.Combine(root, "b.txt"), "12345");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with
             {
                 MaxMatchedBytes = 6
             };
@@ -168,7 +168,7 @@ public class ScanPreviewTests
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
             var limitState = new ScanLimitState();
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with
             {
                 MaxRuntimeSeconds = 0,
                 LimitState = limitState
@@ -191,7 +191,7 @@ public class ScanPreviewTests
         {
             File.WriteAllText(Path.Combine(root, "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "b.txt"), "hello");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with { MaxSearchedFiles = 1 };
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with { MaxSearchedFiles = 1 };
             var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
             Assert.Equal(1, preview.TotalFiles);
         }
@@ -208,7 +208,7 @@ public class ScanPreviewTests
         {
             File.WriteAllText(Path.Combine(root, "one", "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "two", "b.txt"), "hello");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with { MaxMatchedDirectories = 1 };
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with { MaxMatchedDirectories = 1 };
             var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
             Assert.Equal(1, preview.TotalFiles);
         }
@@ -226,7 +226,7 @@ public class ScanPreviewTests
             File.WriteAllText(Path.Combine(root, "one", "a.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "one", "b.txt"), "hello");
             File.WriteAllText(Path.Combine(root, "two", "c.txt"), "hello");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out"), Path.Combine(root, "db.sqlite")) with { MaxMatchedDirectories = 1 };
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "out")) with { MaxMatchedDirectories = 1 };
             var preview = await new ScanPreviewService(new FileDiscoverer()).PreviewAsync(options, CancellationToken.None);
             Assert.Equal(2, preview.TotalFiles);
             Assert.Equal(1, preview.TotalDirectories);

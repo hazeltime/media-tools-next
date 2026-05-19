@@ -118,7 +118,6 @@ public class ImageValidatorTests
             EnableDocuments: false,
             MaxConcurrency: 8,
             MediaProbeSeconds: 120,
-            DatabasePath: Path.Combine(Path.GetTempPath(), "media-tools-next-tests.db"),
             ValidationDepth: depth,
             ExternalToolTimeoutSeconds: 15);
 

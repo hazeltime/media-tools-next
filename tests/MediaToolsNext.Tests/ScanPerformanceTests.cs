@@ -42,7 +42,7 @@ public class ScanPerformanceTests
                 new ScanControl());
 
             // 2. Act - Run first with Concurrency = 1
-            var optionsSingle = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+            var optionsSingle = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 MaxConcurrency = 1,
                 MaxRetries = 0
@@ -61,7 +61,7 @@ public class ScanPerformanceTests
             discoverer.Reset();
 
             // Act - Run with Concurrency = 4
-            var optionsMulti = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+            var optionsMulti = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 MaxConcurrency = 4,
                 MaxRetries = 0

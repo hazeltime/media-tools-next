@@ -14,7 +14,6 @@ public sealed record ScanOptions(
     bool EnableDocuments,
     int MaxConcurrency,
     int MediaProbeSeconds,
-    string DatabasePath = "",
     ValidationDepth ValidationDepth = ValidationDepth.Standard,
     int MaxRetries = 1,
     int? MaxFiles = null,
@@ -48,7 +47,7 @@ public sealed record ScanOptions(
     /// <summary>
     /// Creates a default set of scan options with reasonable defaults.
     /// </summary>
-    public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath = "") =>
+    public static ScanOptions CreateDefault(string sourcePath, string targetRoot) =>
         new(
             sourcePath,
             targetRoot,
@@ -59,8 +58,7 @@ public sealed record ScanOptions(
             EnableAudio: true,
             EnableDocuments: true,
             MaxConcurrency: 8,
-            MediaProbeSeconds: 120,
-            DatabasePath: databasePath);
+            MediaProbeSeconds: 120);
 }
 
 /// <summary>

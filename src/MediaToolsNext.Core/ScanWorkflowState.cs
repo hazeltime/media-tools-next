@@ -298,7 +298,6 @@ public sealed class ScanWorkflowState
 
     public ScanOptions BuildOptions(ScanLimitState? limitState = null)
     {
-        var db = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "media-tools-next", "media-tools-next.db");
         return new ScanOptions(
             SourcePath,
             TargetRoot,
@@ -310,7 +309,6 @@ public sealed class ScanWorkflowState
             EnableDocuments,
             MaxConcurrency: Concurrency,
             MediaProbeSeconds: ProbeSeconds,
-            DatabasePath: db,
             ValidationDepth: ValidationDepth,
             ExternalToolTimeoutSeconds: ToolTimeoutSeconds,
             MaxMatchedFiles: ZeroAsNull(MaxMatchedFiles),

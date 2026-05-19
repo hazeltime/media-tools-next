@@ -14,7 +14,7 @@ public class DiscoveryAndActionTests
             Directory.CreateDirectory(Path.Combine(root, "_out"));
             File.WriteAllText(Path.Combine(root, "photo.jpg"), "x");
             File.WriteAllText(Path.Combine(root, "_out", "ignored.jpg"), "x");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite"));
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"));
             var files = new List<FileCandidate>();
             await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None))
                 files.Add(file);
@@ -38,7 +38,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(target, "target-copy.jpg"), "x");
             File.WriteAllText(Path.Combine(backup, "backup-copy.jpg"), "x");
 
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 BackupRoot = backup
             };
@@ -60,7 +60,7 @@ public class DiscoveryAndActionTests
         try
         {
             File.WriteAllText(Path.Combine(root, "image.jxl"), "x");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -85,7 +85,7 @@ public class DiscoveryAndActionTests
         try
         {
             File.WriteAllText(Path.Combine(root, "IMG_001.bin"), "x");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -110,7 +110,7 @@ public class DiscoveryAndActionTests
         try
         {
             File.WriteAllText(Path.Combine(root, "photo.jpg"), "x");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -134,7 +134,7 @@ public class DiscoveryAndActionTests
         try
         {
             File.WriteAllText(Path.Combine(root, "photo.jpg"), "x");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -161,7 +161,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(root, "IMG_keep.jpg"), new string('x', 2048));
             File.WriteAllText(Path.Combine(root, "IMG_small.jpg"), "x");
             File.WriteAllText(Path.Combine(root, "thumb_keep.jpg"), new string('x', 2048));
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -190,7 +190,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(root, "A_too_small.jpg"), "x");
             File.WriteAllText(Path.Combine(root, "B_keep.jpg"), new string('x', 2048));
             File.WriteAllText(Path.Combine(root, "C_second.jpg"), new string('x', 2048));
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -217,7 +217,7 @@ public class DiscoveryAndActionTests
         {
             File.WriteAllText(Path.Combine(root, "A_too_large.jpg"), new string('x', 2048));
             File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "ok");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -245,7 +245,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
             File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "12345");
             File.WriteAllText(Path.Combine(root, "C_stop.jpg"), "12345");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -273,7 +273,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
             File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "12345");
             File.WriteAllText(Path.Combine(root, "C_stop.jpg"), "12345");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -307,7 +307,7 @@ public class DiscoveryAndActionTests
                     searched++;
             });
             var limitState = new ScanLimitState();
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -335,7 +335,7 @@ public class DiscoveryAndActionTests
         {
             File.WriteAllText(Path.Combine(root, "A_skip.jpg"), "x");
             File.WriteAllText(Path.Combine(root, "B_keep.jpg"), "x");
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target")) with
             {
                 EnableVideo = false,
                 EnableAudio = false,
@@ -364,7 +364,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite"));
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"));
             var action = await new FileActionService().ApplyAsync(outcome, options, CancellationToken.None);
             Assert.Equal("dry-run", action.Action);
             Assert.False(Directory.Exists(Path.Combine(root, "target")));
@@ -383,7 +383,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted
             };
@@ -411,7 +411,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Corrupt, "test", "broken", TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySortedAndBackup,
                 BackupRoot = backup
@@ -444,7 +444,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(target, "valid", "docs", "a.txt"), "existing");
             var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySortedAndBackup,
                 BackupRoot = backup
@@ -475,7 +475,7 @@ public class DiscoveryAndActionTests
             Directory.CreateDirectory(Path.Combine(backup, "valid", "docs", "a.txt"));
             var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySortedAndBackup,
                 BackupRoot = backup
@@ -500,7 +500,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionStatuses = new HashSet<ValidationStatus> { ValidationStatus.Corrupt }
@@ -525,7 +525,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 OutputGrouping = OutputGrouping.MediaCategory,
@@ -550,7 +550,7 @@ public class DiscoveryAndActionTests
         {
             var target = Path.Combine(root, "target");
             var service = new FileActionService();
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 OutputPathLayout = OutputPathLayout.Flat
@@ -589,7 +589,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, Path.Combine("..", "escape.txt"), ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted
             };
@@ -610,7 +610,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Move
@@ -636,7 +636,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Move
@@ -664,7 +664,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Move
@@ -705,7 +705,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source, "hello");
             var candidate = new FileCandidate(source, Path.Combine("..", "escape.txt"), ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
             var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 OutputGrouping = OutputGrouping.None
@@ -724,7 +724,7 @@ public class DiscoveryAndActionTests
         {
             var target = Path.Combine(root, "target");
             var service = new FileActionService();
-            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var options = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 OutputGrouping = OutputGrouping.None,
@@ -769,7 +769,7 @@ public class DiscoveryAndActionTests
             var service = new FileActionService();
 
             // 1. Copy operation
-            var optionsCopy = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var optionsCopy = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Copy,
@@ -779,7 +779,7 @@ public class DiscoveryAndActionTests
             Assert.Equal("copied", actionCopy.Action);
 
             // 2. Skipped due to status filter
-            var optionsSkip = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var optionsSkip = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Copy,
@@ -794,7 +794,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(source2, "world!");
             var candidate2 = new FileCandidate(source2, "b.txt", ".txt", MediaCategory.Document, 6, DateTimeOffset.UtcNow);
             var outcome2 = new ValidationOutcome(candidate2, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
-            var optionsMove = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            var optionsMove = ScanOptions.CreateDefault(root, target) with
             {
                 ActionMode = ScanActionMode.CopySorted,
                 ActionOperation = FileActionOperation.Move,
