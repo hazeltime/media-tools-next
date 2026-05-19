@@ -3,7 +3,14 @@
 @inject FolderPickerService Picker
 @inject IExternalToolProbe ToolProbe
 
-<div class="configure-page">
+<div class="page-stack">
+    <header class="page-header">
+        <p class="eyebrow">Configuration</p>
+        <h1>Configure</h1>
+        <p>Set up scan paths, media types, validation depth, and output preferences.</p>
+    </header>
+
+    <div class="configure-page">
 
     <!-- ═══ SECTION: Folders & Mode ════════════════════════════════════════════════════ -->
     <section id="cfg-setup" class="panel cfg-section cfg-step-1 cfg-section-anchor">
@@ -69,22 +76,18 @@
                 </label>
             }
 
-            <details class="cfg-subsection">
-                <summary class="cfg-subsection-summary">
-                    <h3 style="display:inline">Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
-                </summary>
-                <div style="margin-top:8px">
-                    <div class="form-grid three">
-                        <label>Max scan seconds   <input type="number" min="0" @bind="State.MaxRuntimeSeconds" /></label>
-                        <label>@(State.IsImageOnly ? "Max image files" : "Max matched files")  <input type="number" min="0" @bind="State.MaxMatchedFiles" /></label>
-                        <label>@(State.IsImageOnly ? "Max total image MB" : "Max total matched MB") <input type="number" min="0" @bind="State.MaxMatchedMb" /></label>
-                    </div>
-                    <div class="button-row" style="margin-top:10px">
-                        <button @onclick="Defaults">Default limits</button>
-                        <button class="secondary" @onclick="Clear">Unlimited (set all to 0)</button>
-                    </div>
+            <div class="cfg-subsection">
+                <h3>Hard limits <span class="cfg-hint">Set to 0 to disable.</span></h3>
+                <div class="form-grid three">
+                    <label>Max scan seconds   <input type="number" min="0" @bind="State.MaxRuntimeSeconds" /></label>
+                    <label>@(State.IsImageOnly ? "Max image files" : "Max matched files")  <input type="number" min="0" @bind="State.MaxMatchedFiles" /></label>
+                    <label>@(State.IsImageOnly ? "Max total image MB" : "Max total matched MB") <input type="number" min="0" @bind="State.MaxMatchedMb" /></label>
                 </div>
-            </details>
+                <div class="button-row cfg-mt-sm">
+                    <button @onclick="Defaults">Default limits</button>
+                    <button class="secondary" @onclick="Clear">Unlimited (set all to 0)</button>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -208,7 +211,7 @@
                         <span class="tool @(tool.IsAvailable ? "ok" : "missing")" title="@(tool.Version ?? tool.Path ?? "Not found on PATH")">@tool.Name</span>
                     }
                 </div>
-                <div class="form-grid three" style="margin-top:12px">
+                <div class="form-grid three cfg-mt-sm">
                     <label>
                         Concurrency: @State.Concurrency
                         <div class="slider-row">
@@ -308,17 +311,18 @@
                             <option value="time">Scan order</option>
                         </select>
                     </label>
-                    <label class="choice" style="align-self:end">
+                    <label class="choice cfg-align-end">
                         <input type="checkbox" @bind="State.GroupReportByStatus" /> Group by status
                     </label>
                 </div>
             </div>
         </div>
-    </section>
+        </section>
 
-</div>
+    </div> <!-- /configure-page -->
+</div> <!-- /page-stack -->
 
-@code {
+    @code {
     private static readonly ValidationStatus[] Copyable =
         [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
 

@@ -466,8 +466,8 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
     min-width: 0;
     padding: var(--gap-md);
 }
-.summary-tile-group:first-child { background: linear-gradient(180deg, #f8fbfc, #eef5f7); }
-.summary-tile-group:last-child { background: linear-gradient(180deg, #ffffff, #f6fbf8); }
+.summary-tile-group:first-child { background: linear-gradient(180deg, var(--c-surface-2), var(--c-surface-3)); }
+.summary-tile-group:last-child { background: linear-gradient(180deg, var(--c-surface), var(--c-surface-2)); }
 .summary-tile-group-label {
     color: var(--c-muted);
     font-size: 11px;
@@ -497,10 +497,10 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 .summary-tile strong { font-size: 20px; font-weight: 900; letter-spacing: -.4px; line-height: 1.1; }
 .summary-tile span   { color: var(--c-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .summary-tile small  { color: var(--tile-accent, var(--c-muted)); font-size: 11px; font-weight: 800; }
-.summary-tile.valid   { --tile-accent: #166534; }
-.summary-tile.corrupt { --tile-accent: #991b1b; }
-.summary-tile.unknown { --tile-accent: #92400e; }
-.summary-tile.error   { --tile-accent: #9f1239; }
+.summary-tile.valid   { --tile-accent: var(--c-success); }
+.summary-tile.corrupt { --tile-accent: var(--c-danger); }
+.summary-tile.unknown { --tile-accent: var(--c-warning); }
+.summary-tile.error   { --tile-accent: #be123c; }
 .summary-tile.skipped { --tile-accent: var(--c-secondary); }
 .summary-tile.active  { color: var(--tile-accent, var(--c-accent)); }
 
@@ -608,7 +608,6 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
 .cfg-section-anchor {
     scroll-margin-top: 80px;
 }
-
 /* ═══════════════════════════════════════════════════════════════════════════
    Slider
    ══════════════════════════════════════════════════════════════════════════ */
@@ -924,7 +923,7 @@ table { border-collapse: collapse; width: 100%; }
 }
 .results-table thead {
     background: var(--c-surface);
-    box-shadow: 0 2px 0 #b6cbd3;
+    box-shadow: 0 2px 0 var(--c-border);
     position: sticky;
     top: 0;
     z-index: 3;
@@ -932,8 +931,8 @@ table { border-collapse: collapse; width: 100%; }
 .results-table th {
     background: var(--c-surface);
 }
-.results-table tbody tr:nth-child(even) { background: #f7fafb; }
-.results-table tbody tr:hover { background: #ecfeff; }
+.results-table tbody tr:nth-child(even) { background: var(--c-surface-2); }
+.results-table tbody tr:hover { background: var(--c-accent-soft); }
 .status-col    { width: 120px; }
 .type-col      { width: 110px; }
 .size-col      { width: 110px; }
@@ -949,22 +948,23 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     word-break: break-word;
 }
 .status-pill {
-    border: 1px solid rgba(15,31,45,.12);
+    border: 1px solid var(--c-border-soft);
     border-radius: 999px;
     display: inline-block;
     font-size: 12px;
     font-weight: 800;
     padding: 2px 8px;
 }
-.status-pill.valid                         { background: #d9fbe8; color: #14532d; }
-.status-pill.corrupt, .status-pill.error   { background: #ffe1e1; color: #8f1111; }
-.status-pill.unknown                       { background: #fff0c2; color: #78350f; }
-.status-pill.skipped                       { background: #e6edf2; color: var(--c-secondary); }
+.status-pill.valid      { background: var(--c-success-bg); color: var(--c-success); }
+.status-pill.corrupt    { background: var(--c-danger-bg); color: var(--c-danger); }
+.status-pill.error      { background: #ffdce5; color: #881337; }
+.status-pill.unknown    { background: var(--c-warning-bg); color: var(--c-warning); }
+.status-pill.skipped    { background: var(--c-secondary-bg); color: var(--c-secondary); }
 .empty-cell { color: var(--c-muted); padding: 28px; text-align: center; }
 .result-path-button {
     background: transparent;
     border: 0;
-    color: #006bb7;
+    color: var(--c-info);
     display: block;
     font-weight: 700;
     max-height: 3.2em;
@@ -976,6 +976,11 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     word-break: break-word;
 }
 .result-path-button:hover { background: transparent; color: var(--c-accent-dark); text-decoration: underline; }
+.result-path-button:focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+}
 .result-group-heading {
     align-items: baseline;
     display: flex;
@@ -988,10 +993,11 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
 .results-workspace:focus { outline: 2px solid var(--c-accent); outline-offset: -2px; }
 .results-actions { padding: 10px 12px; }
 .select-col { width: 42px; }
-.current-row { background: #ecfeff; outline: 2px solid rgba(15,118,110,.22); }
+.current-row { background: var(--c-accent-soft); outline: 2px solid var(--c-focus); }
 .pager {
     align-items: center;
     background: var(--c-surface);
+    border-top: 1px solid var(--c-border-soft);
     bottom: 0;
     display: flex;
     gap: var(--gap-sm);
@@ -1013,7 +1019,7 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     background: var(--c-surface);
     border: 1px solid var(--c-border);
     border-radius: var(--radius-md);
-    box-shadow: 0 8px 24px rgba(15, 31, 45, .10);
+    box-shadow: var(--shadow-md);
     display: grid;
     gap: var(--gap-md);
     flex: 0 0 auto;
@@ -1059,14 +1065,14 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 .tool-status-card {
-    border: 1px solid #b6cbd3;
+    border: 1px solid var(--c-border);
     border-radius: var(--radius-md);
     display: grid;
     gap: var(--gap-xs);
     padding: var(--gap-md);
 }
-.tool-status-card.ok { background: #f0fdf4; }
-.tool-status-card.missing { background: #fef2f2; }
+.tool-status-card.ok { background: var(--c-success-soft); }
+.tool-status-card.missing { background: var(--c-danger-soft); }
 .tool-status-card div { align-items: baseline; display: flex; justify-content: space-between; }
 .tool-status-card p { color: var(--c-text); font-size: 12px; min-height: 32px; }
 .tool-status-card small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
