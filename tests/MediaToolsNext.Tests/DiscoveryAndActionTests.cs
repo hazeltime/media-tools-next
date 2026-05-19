@@ -562,6 +562,34 @@ public class DiscoveryAndActionTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task MoveSortedReportsDeleteFailureWithoutDuplicatingTarget()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                ActionOperation = FileActionOperation.Move
+            };
+            var service = new FileActionService(_ => throw new IOException("source is locked"));
+
+            var action = await service.ApplyAsync(outcome, options, CancellationToken.None);
+
+            Assert.StartsWith("move-delete-failed: IOException:", action.Action);
+            Assert.Equal(Path.Combine(target, "valid", "a.txt"), action.PrimaryTargetPath);
+            Assert.True(File.Exists(source));
+            Assert.Equal(["a.txt"], Directory.GetFiles(Path.Combine(target, "valid")).Select(Path.GetFileName).ToArray());
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private static string NewTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());

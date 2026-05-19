@@ -4,6 +4,18 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class FileActionService : IFileActionService
 {
+    private readonly Action<string> _deleteFile;
+
+    public FileActionService()
+        : this(File.Delete)
+    {
+    }
+
+    internal FileActionService(Action<string> deleteFile)
+    {
+        _deleteFile = deleteFile;
+    }
+
     public async Task<FileActionOutcome> ApplyAsync(ValidationOutcome outcome, ScanOptions options, CancellationToken cancellationToken)
     {
         if (options.ActionMode == ScanActionMode.DryRun)
@@ -41,11 +53,21 @@ public sealed class FileActionService : IFileActionService
             primaryTarget = await CopyToAvailablePathAsync(outcome.Candidate.FullPath, primaryBaseTarget, copyBufferBytes, cancellationToken);
         }
 
+        var action = options.ActionOperation == FileActionOperation.Move ? "moved" : "copied";
         if (options.ActionOperation == FileActionOperation.Move)
-            File.Delete(outcome.Candidate.FullPath);
+        {
+            try
+            {
+                _deleteFile(outcome.Candidate.FullPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                action = "move-delete-failed: " + ex.GetType().Name + ": " + ex.Message;
+            }
+        }
 
         return new FileActionOutcome(
-            options.ActionOperation == FileActionOperation.Move ? "moved" : "copied",
+            action,
             primaryTarget,
             backupTarget,
             null);
