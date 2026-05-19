@@ -16,7 +16,7 @@ public sealed record ScanOptions(
     int MaxRetries = 1,
     int? MaxFiles = null,
     int? MaxDirectories = null,
-    int ExternalToolTimeoutSeconds = 20,
+    int ExternalToolTimeoutSeconds = 15,
     int? MaxSearchedFiles = null,
     int? MaxMatchedFiles = null,
     int? MaxSearchedDirectories = null,
