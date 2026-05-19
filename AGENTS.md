@@ -22,6 +22,22 @@ Use this repo guidance to reduce token, API, and quota usage while preserving qu
 - Make the smallest correct change that fits existing patterns.
 - Run targeted tests during worker tasks and one final integration verification centrally.
 
+### Default Command Ladder
+
+1. Start with `git status --short --branch`.
+2. Use focused `rg` / `rg --files` to find only the relevant symbols and files.
+3. Read only the files that are likely to be changed or directly explain the behavior.
+4. Run the narrowest relevant test/build first, preferably through `scripts\verify-fast.ps1`.
+5. Commit after each verified logical slice when changes are requested.
+6. Run `scripts\verify-full.ps1` once before final push or final report for cross-project changes.
+
+### Current Local Setup
+
+- Verification shortcuts are committed in `scripts\verify-fast.ps1` and `scripts\verify-full.ps1`; use them instead of retyping long command sequences.
+- Local VS Code/C# LSP tuning is installed in ignored `.vscode\settings.json` and `.vscode\extensions.json`.
+- Keep GitHub MCP idle unless the task is explicitly about GitHub PRs, issues, checks, reviews, branches, or remote repository state.
+- Do not add new MCP servers, plugins, skills, or editor extensions unless they replace a repeated repo workflow and are approved or specifically requested.
+
 ### Token and API Budget
 
 - Use local files, `rg`, and targeted builds before web search, GitHub connectors, MCP servers, or package lookups.
@@ -40,7 +56,8 @@ Use this repo guidance to reduce token, API, and quota usage while preserving qu
 ### LSP And Editor Efficiency
 
 - Prefer C# Dev Kit or OmniSharp/Roslyn for C# language service. Avoid running multiple C# language servers on the same workspace.
-- Exclude generated and heavy folders from search/watch: `bin`, `obj`, `.vs`, `TestResults`, `publish-root`, and SQLite/log artifacts.
+- Exclude generated and heavy folders from search/watch: `bin`, `obj`, `.vs`, `TestResults`, `publish-root`, `publish-linux-cli`, and SQLite/log artifacts.
+- Use the ignored `.vscode\settings.json` in this workspace for local watcher/search exclusions; do not commit personal editor state.
 - Keep analyzers enabled for open files and build/test commands; do not run full-solution analysis unless the change touches shared contracts or project configuration.
 - For MAUI Desktop work on Windows, target `net10.0-windows10.0.19041.0` unless the task explicitly concerns Android, iOS, or MacCatalyst.
 
@@ -85,6 +102,8 @@ Use this repo guidance to reduce token, API, and quota usage while preserving qu
   - `dotnet build src\MediaToolsNext.Cli\MediaToolsNext.Cli.csproj --no-restore`
   - `dotnet build src\MediaToolsNext.Infrastructure\MediaToolsNext.Infrastructure.csproj --no-restore`
   - `dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0-windows10.0.19041.0 --no-restore`
+- Use `scripts\verify-fast.ps1 -Area <core|infra|cli|desktop|desktop-tests|tests> [-Filter <xUnitFilter>]` for focused checks.
+- Use `scripts\verify-full.ps1` for the final cross-project verification pass.
 
 ### Checkpoints
 
