@@ -66,16 +66,21 @@ public sealed class ScannerPipeline(
                 buffer.Clear();
             }
 
-            await foreach (var candidate in channel.Reader.ReadAllAsync(runToken))
+            try
             {
-                await control.WaitIfPausedAsync(runToken);
-                var record = await ProcessCandidateAsync(sessionId, candidate, options, runToken);
-                buffer.Add(record);
-                if (buffer.Count >= BatchSize)
-                    await FlushAsync(runToken);
+                await foreach (var candidate in channel.Reader.ReadAllAsync(runToken))
+                {
+                    await control.WaitIfPausedAsync(runToken);
+                    var record = await ProcessCandidateAsync(sessionId, candidate, options, runToken);
+                    buffer.Add(record);
+                    if (buffer.Count >= BatchSize)
+                        await FlushAsync(runToken);
+                }
             }
-
-            await FlushAsync(runToken);
+            finally
+            {
+                await FlushAsync(CancellationToken.None);
+            }
         }, runToken)).ToArray();
 
         try

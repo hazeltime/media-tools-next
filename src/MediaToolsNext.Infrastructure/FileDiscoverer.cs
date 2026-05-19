@@ -88,6 +88,9 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 catch (UnauthorizedAccessException) { continue; }
                 catch                               { continue; }
 
+                if (ShouldStopBeforeNextSearchedFile())
+                    yield break;
+
                 var fileExists = info.Exists;
                 var fileLength = fileExists ? info.Length : 0L;
 
@@ -176,11 +179,6 @@ public sealed class FileDiscoverer : IFileDiscoverer
 
         bool ShouldStopBeforeNextMatch()
         {
-            if (options.MaxSearchedFiles is int maxSearchedFiles && searchedFiles > maxSearchedFiles)
-            {
-                Stop($"Stopped after inspecting {maxSearchedFiles:N0} searched files.");
-                return true;
-            }
             var minScannedBytesReached = options.MinScannedBytes is not long minScannedBytes || scannedBytes >= minScannedBytes;
             if (minScannedBytesReached
                 && options.MaxScannedBytes is long maxScannedBytes
@@ -197,6 +195,14 @@ public sealed class FileDiscoverer : IFileDiscoverer
                 return true;
             }
             return false;
+        }
+
+        bool ShouldStopBeforeNextSearchedFile()
+        {
+            if (options.MaxSearchedFiles is not int maxSearchedFiles || searchedFiles < maxSearchedFiles)
+                return false;
+            Stop($"Stopped after inspecting {maxSearchedFiles:N0} searched files.");
+            return true;
         }
 
         void Stop(string reason) => options.LimitState?.Stop(reason);

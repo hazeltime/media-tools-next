@@ -72,7 +72,18 @@ var defaultDb = ValueAfter("--db")
 
 var tuning = new HardwareTuner();
 var hardwareProfile = tuning.Recommend(source, target);
-var build = CliScanOptionsBuilder.Build(args, hardwareProfile, defaultDb);
+CliScanOptionsBuildResult build;
+try
+{
+    build = CliScanOptionsBuilder.Build(args, hardwareProfile, defaultDb);
+}
+catch (ArgumentException ex)
+{
+    Console.Error.WriteLine("Argument error: " + ex.Message);
+    Console.Error.WriteLine("Run with --help for usage.");
+    Environment.ExitCode = 2;
+    return;
+}
 var options = build.Options;
 var exportPath = build.ExportPath;
 

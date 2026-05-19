@@ -293,6 +293,41 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task DiscoveryDoesNotSearchPastMaxSearchedFilesLimit()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
+            File.WriteAllText(Path.Combine(root, "B_stop.jpg"), "12345");
+            var searched = 0;
+            var progress = new Progress<ScanDiscoveryEvent>(e =>
+            {
+                if (e.Type == DiscoveryEventType.Searched)
+                    searched++;
+            });
+            var limitState = new ScanLimitState();
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MaxSearchedFiles = 1,
+                LimitState = limitState
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None, progress))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal(1, searched);
+            Assert.Equal("Stopped after inspecting 1 searched files.", limitState.StopReason);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DiscoveryAppliesWildcardFiltersBeforeMatchedFileLimit()
     {
         var root = NewTempDir();
@@ -428,6 +463,33 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task CopySortedAndBackupPreservesBackupWriteFailureWhenCleanupFails()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            var backup = Path.Combine(root, "backup");
+            File.WriteAllText(source, "hello");
+            Directory.CreateDirectory(Path.Combine(backup, "valid", "docs", "a.txt"));
+            var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySortedAndBackup,
+                BackupRoot = backup
+            };
+            var service = new FileActionService(_ => throw new IOException("cleanup failed"));
+
+            var ex = await Assert.ThrowsAnyAsync<Exception>(() => service.ApplyAsync(outcome, options, CancellationToken.None));
+
+            Assert.DoesNotContain("cleanup failed", ex.Message);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CopySortedSkipsUnselectedOutcomes()
     {
         var root = NewTempDir();
@@ -558,6 +620,34 @@ public class DiscoveryAndActionTests
             Assert.Equal("moved", action.Action);
             Assert.False(File.Exists(source));
             Assert.True(File.Exists(Path.Combine(target, "valid", "a.txt")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task MoveSortedReportsDeleteFailureWithoutDuplicatingTarget()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            File.WriteAllText(source, "hello");
+            var candidate = new FileCandidate(source, "a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySorted,
+                ActionOperation = FileActionOperation.Move
+            };
+            var service = new FileActionService(_ => throw new IOException("source is locked"));
+
+            var action = await service.ApplyAsync(outcome, options, CancellationToken.None);
+
+            Assert.StartsWith("move-delete-failed: IOException:", action.Action);
+            Assert.Equal(Path.Combine(target, "valid", "a.txt"), action.PrimaryTargetPath);
+            Assert.True(File.Exists(source));
+            Assert.Equal(["a.txt"], Directory.GetFiles(Path.Combine(target, "valid")).Select(path => Path.GetFileName(path)!).ToArray());
         }
         finally { Directory.Delete(root, true); }
     }

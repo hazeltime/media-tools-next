@@ -4,6 +4,18 @@ namespace MediaToolsNext.Infrastructure;
 
 public sealed class FileActionService : IFileActionService
 {
+    private readonly Action<string> _deleteFile;
+
+    public FileActionService()
+        : this(File.Delete)
+    {
+    }
+
+    internal FileActionService(Action<string> deleteFile)
+    {
+        _deleteFile = deleteFile;
+    }
+
     public async Task<FileActionOutcome> ApplyAsync(ValidationOutcome outcome, ScanOptions options, CancellationToken cancellationToken)
     {
         if (options.ActionMode == ScanActionMode.DryRun)
@@ -41,11 +53,21 @@ public sealed class FileActionService : IFileActionService
             primaryTarget = await CopyToAvailablePathAsync(outcome.Candidate.FullPath, primaryBaseTarget, copyBufferBytes, cancellationToken);
         }
 
+        var action = options.ActionOperation == FileActionOperation.Move ? "moved" : "copied";
         if (options.ActionOperation == FileActionOperation.Move)
-            File.Delete(outcome.Candidate.FullPath);
+        {
+            try
+            {
+                _deleteFile(outcome.Candidate.FullPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                action = "move-delete-failed: " + ex.GetType().Name + ": " + ex.Message;
+            }
+        }
 
         return new FileActionOutcome(
-            options.ActionOperation == FileActionOperation.Move ? "moved" : "copied",
+            action,
             primaryTarget,
             backupTarget,
             null);
@@ -80,7 +102,7 @@ public sealed class FileActionService : IFileActionService
         }
     }
 
-    private static async Task<(string PrimaryTarget, string BackupTarget)> CopyToSharedAvailablePathsAsync(
+    private async Task<(string PrimaryTarget, string BackupTarget)> CopyToSharedAvailablePathsAsync(
         string source,
         string primaryTarget,
         string backupTarget,
@@ -116,14 +138,26 @@ public sealed class FileActionService : IFileActionService
             }
             catch (IOException ex) when (IsAlreadyExists(ex))
             {
-                File.Delete(primaryCandidate);
+                TryDeletePartialPrimary(primaryCandidate);
                 continue;
             }
             catch
             {
-                File.Delete(primaryCandidate);
+                TryDeletePartialPrimary(primaryCandidate);
                 throw;
             }
+        }
+    }
+
+    private void TryDeletePartialPrimary(string path)
+    {
+        try
+        {
+            _deleteFile(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Preserve the original backup write failure; cleanup errors are secondary.
         }
     }
 
