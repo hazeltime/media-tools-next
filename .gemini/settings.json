@@ -1,0 +1,9 @@
+{
+  "experimental": {
+    "richOutput": true,
+    "lspEnabled": true,
+    "mcpEnabled": true,
+    "pluginsEnabled": true,
+    "extensionsEnabled": true
+  }
+}

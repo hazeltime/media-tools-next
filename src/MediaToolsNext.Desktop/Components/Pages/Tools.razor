@@ -4,54 +4,85 @@
 
 <div class="page-stack">
     <header class="page-header">
-        <p class="eyebrow">System</p>
-        <h1>Tools</h1>
-        <p>Check external validators and install missing tools with Chocolatey or winget.</p>
+        <p class="eyebrow">System Configuration</p>
+        <h1>Tools & Dependencies</h1>
+        <p>Manage external validators required for media processing and install missing tools automatically.</p>
     </header>
 
-    @if (!string.IsNullOrWhiteSpace(_message)) { <div class="notice">@_message</div> }
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="notice">@_message</div>
+    }
+
+    <section class="panel">
+        <h2>Installation Behavior</h2>
+        <p class="muted">Installs run in the background with <code>choco install -y --no-progress</code> first. If Chocolatey is unavailable, the app falls back to <code>winget install --silent</code>. Some tool installations may require administrator permissions or a system restart to update the PATH environment variable.</p>
+    </section>
 
     <section class="panel">
         <div class="panel-title-row">
             <div>
-                <h2>Validator tools</h2>
-                <p class="muted">The app probes these commands directly. Refresh after install or upgrade if PATH changed.</p>
+                <h2>Validator Tools</h2>
+                <p class="muted">Directly probed commands. Refresh status after installation to detect PATH changes.</p>
             </div>
             <div class="action-bar">
                 @if (IsBusy)
                 {
-                    <button class="danger" @onclick="CancelOperation">Cancel operation</button>
+                    <button class="btn btn-danger" @onclick="CancelOperation">
+                        <span class="bi bi-x-circle"></span> Cancel
+                    </button>
                 }
-                <button class="secondary" disabled="@IsBusy" @onclick="RefreshTools">Refresh status</button>
-                <button disabled="@IsBusy" @onclick="UpgradeAllAsync">Check and upgrade all</button>
+                <button class="btn btn-secondary" disabled="@IsBusy" @onclick="RefreshTools">
+                    <span class="bi bi-arrow-clockwise"></span> Refresh Status
+                </button>
+                <button class="btn btn-primary" disabled="@IsBusy" @onclick="UpgradeAllAsync">
+                    <span class="bi bi-cloud-arrow-up"></span> Upgrade All
+                </button>
             </div>
         </div>
+
         <div class="tool-status-grid">
             @foreach (var tool in _toolStatuses)
             {
                 <div class="tool-status-card @(tool.IsAvailable ? "ok" : "missing")">
                     <div>
                         <strong>@tool.Name</strong>
-                        <span class="tool-state @(tool.IsAvailable ? "ok" : "missing")">@ToolState(tool)</span>
+                        <span class="tool-state @(tool.IsAvailable ? "ok" : "missing")">
+                            @if (tool.IsAvailable) { <span class="bi bi-check-circle-fill"></span> <span>Installed</span> }
+                            else { <span class="bi bi-exclamation-triangle-fill"></span> <span>Missing</span> }
+                        </span>
                     </div>
+                    
                     <p>@ToolDetail(tool)</p>
+                    
                     <small title="@tool.Path">@((tool.Path ?? "Not found on PATH"))</small>
+                    
                     <div class="action-bar">
-                        <button class="secondary" disabled="@IsBusy" @onclick="() => InstallAsync(tool.Name)">
-                            @InstallButtonText(tool)
+                        <button class="btn btn-secondary" disabled="@IsBusy" @onclick="() => InstallAsync(tool.Name)">
+                            @if (_installing == tool.Name) { <span>Installing...</span> }
+                            else { <span class="bi bi-download"></span> @InstallButtonText(tool) }
                         </button>
-                        <button class="secondary" disabled="@IsBusy || !tool.IsAvailable" @onclick="() => UpgradeAsync(tool.Name)">
-                            @UpgradeButtonText(tool.Name)
+                        <button class="btn btn-secondary" disabled="@(IsBusy || !tool.IsAvailable)" @onclick="() => UpgradeAsync(tool.Name)">
+                            @if (_upgrading == tool.Name) { <span>Checking...</span> }
+                            else { <span class="bi bi-arrow-up-circle"></span> <span>Upgrade</span> }
                         </button>
                     </div>
                 </div>
             }
         </div>
-    </section>
-
-    <section class="panel">
-        <h2>Install behavior</h2>
-        <p class="muted">Install runs in the background with `choco install -y --no-progress` first. If Chocolatey is unavailable or fails, the app tries `winget install --silent` with package agreements accepted. Some installs may still require administrator permission or PATH refresh before the app sees the tool.</p>
+        
+        @if (!string.IsNullOrEmpty(_lastLogOutput))
+        {
+            <div class="notice">
+                <div class="panel-title-row">
+                    <strong>Command Output</strong>
+                    <button class="btn btn-secondary" @onclick="() => _lastLogOutput = null" title="Clear log">
+                        <span class="bi bi-x-lg"></span>
+                    </button>
+                </div>
+                <pre>@_lastLogOutput</pre>
+            </div>
+        }
     </section>
 </div>
 
@@ -59,42 +90,31 @@
     private string? _installing;
     private string? _upgrading;
     private string? _message;
+    private string? _lastLogOutput;
     private IReadOnlyList<ToolStatus> _toolStatuses = [];
-    private bool IsBusy => _installing is not null || _upgrading is not null;
+    private bool IsBusy => _installing is not null || _upgrading is not null || _upgrading == "*";
     private CancellationTokenSource? _installCts;
 
-    protected override void OnInitialized()
-    {
-        LoadToolStatuses();
-    }
-
-    private static string ToolState(ToolStatus tool) =>
-        tool.IsAvailable ? "Already installed" : "Missing / not installed";
+    protected override void OnInitialized() => LoadToolStatuses();
 
     private static string ToolDetail(ToolStatus tool) =>
         tool.IsAvailable ? tool.Version ?? "Installed, version unavailable" : tool.Detail ?? "Command is not available.";
 
     private string InstallButtonText(ToolStatus tool)
     {
-        if (_installing == tool.Name) return "Installing...";
         if (tool.IsAvailable) return tool.Name == "ffprobe" ? "Reinstall ffmpeg" : "Reinstall";
         return tool.Name == "ffprobe" ? "Install ffmpeg" : "Install";
     }
-
-    private string UpgradeButtonText(string toolName) =>
-        _upgrading == toolName || _upgrading == "*" ? "Checking..." : "Check / upgrade";
 
     private void RefreshTools()
     {
         ToolProbe.Refresh();
         LoadToolStatuses();
         _message = "Tool status refreshed.";
+        _lastLogOutput = null;
     }
 
-    private void LoadToolStatuses()
-    {
-        _toolStatuses = ToolProbe.GetStatuses();
-    }
+    private void LoadToolStatuses() => _toolStatuses = ToolProbe.GetStatuses();
 
     private void CancelOperation()
     {
@@ -104,7 +124,8 @@
 
     private async Task<string> SaveLogIfNeededAsync(string action, string toolName, string output)
     {
-        if (output.Length <= 500) return TrimOutput(output);
+        _lastLogOutput = output; // Show in the new beautiful terminal box at the bottom
+        if (output.Length <= 500) return "Process completed. See log below for details.";
 
         try
         {
@@ -114,11 +135,11 @@
             var filename = $"tool-{action}-{toolName}-{timestamp}.log";
             var logPath = Path.Combine(appData, filename);
             await File.WriteAllTextAsync(logPath, output);
-            return $"{output[..500]}...\n[Full log saved to: {logPath}]";
+            return $"Log saved to: {logPath}";
         }
         catch (Exception ex)
         {
-            return $"{output[..500]}...\n[Failed to save full log: {ex.Message}]";
+            return $"Failed to save full log: {ex.Message}";
         }
     }
 
@@ -126,95 +147,53 @@
     {
         _installing = toolName;
         _message = $"Installing {toolName}...";
+        _lastLogOutput = null;
         _installCts = new CancellationTokenSource();
         try
         {
             var result = await Installer.InstallAsync(toolName, _installCts.Token);
-            var outputMsg = await SaveLogIfNeededAsync("install", toolName, result.Output);
-            _message = result.Success
-                ? $"Install command completed: {result.Command}. Refreshed tool status; restart the app if PATH still has not updated."
-                : $"Install failed: {result.Command}. {outputMsg}";
-            ToolProbe.Refresh();
-            LoadToolStatuses();
+            var logStatus = await SaveLogIfNeededAsync("install", toolName, result.Output);
+            _message = result.Success ? $"Successfully installed {toolName}. {logStatus}" : $"Failed to install {toolName}. {logStatus}";
+            ToolProbe.Refresh(); LoadToolStatuses();
         }
-        catch (OperationCanceledException)
-        {
-            _message = "Installation cancelled.";
-        }
-        catch (Exception ex)
-        {
-            _message = $"Installation error: {ex.Message}";
-        }
-        finally
-        {
-            _installing = null;
-            _installCts?.Dispose();
-            _installCts = null;
-        }
+        catch (OperationCanceledException) { _message = "Installation cancelled."; }
+        catch (Exception ex) { _message = $"Installation error: {ex.Message}"; }
+        finally { _installing = null; _installCts?.Dispose(); _installCts = null; }
     }
 
     private async Task UpgradeAsync(string toolName)
     {
         _upgrading = toolName;
-        _message = $"Checking/upgrading {toolName}...";
+        _message = $"Checking updates for {toolName}...";
+        _lastLogOutput = null;
         _installCts = new CancellationTokenSource();
         try
         {
             var result = await Installer.UpgradeAsync(toolName, _installCts.Token);
-            var outputMsg = await SaveLogIfNeededAsync("upgrade", toolName, result.Output);
-            _message = result.Success
-                ? $"Upgrade check completed: {result.Command}. {outputMsg}"
-                : $"Upgrade check failed: {result.Command}. {outputMsg}";
-            ToolProbe.Refresh();
-            LoadToolStatuses();
+            var logStatus = await SaveLogIfNeededAsync("upgrade", toolName, result.Output);
+            _message = result.Success ? $"Upgrade check completed for {toolName}. {logStatus}" : $"Upgrade check failed for {toolName}. {logStatus}";
+            ToolProbe.Refresh(); LoadToolStatuses();
         }
-        catch (OperationCanceledException)
-        {
-            _message = "Upgrade cancelled.";
-        }
-        catch (Exception ex)
-        {
-            _message = $"Upgrade error: {ex.Message}";
-        }
-        finally
-        {
-            _upgrading = null;
-            _installCts?.Dispose();
-            _installCts = null;
-        }
+        catch (OperationCanceledException) { _message = "Upgrade cancelled."; }
+        catch (Exception ex) { _message = $"Upgrade error: {ex.Message}"; }
+        finally { _upgrading = null; _installCts?.Dispose(); _installCts = null; }
     }
 
     private async Task UpgradeAllAsync()
     {
         _upgrading = "*";
-        _message = "Checking/upgrading all validator tools...";
+        _message = "Checking updates for all validator tools...";
+        _lastLogOutput = null;
         _installCts = new CancellationTokenSource();
         try
         {
             var result = await Installer.UpgradeAllAsync(_toolStatuses.Select(t => t.Name), _installCts.Token);
-            var outputMsg = await SaveLogIfNeededAsync("upgrade-all", "all", result.Output);
-            _message = result.Success
-                ? $"Upgrade checks completed. {outputMsg}"
-                : $"One or more upgrade checks failed. {outputMsg}";
-            ToolProbe.Refresh();
-            LoadToolStatuses();
+            var logStatus = await SaveLogIfNeededAsync("upgrade-all", "all", result.Output);
+            _message = result.Success ? $"Upgrade checks completed for all tools. {logStatus}" : $"One or more upgrade checks failed. {logStatus}";
+            ToolProbe.Refresh(); LoadToolStatuses();
         }
-        catch (OperationCanceledException)
-        {
-            _message = "Upgrade operation cancelled.";
-        }
-        catch (Exception ex)
-        {
-            _message = $"Upgrade operation error: {ex.Message}";
-        }
-        finally
-        {
-            _upgrading = null;
-            _installCts?.Dispose();
-            _installCts = null;
-        }
+        catch (OperationCanceledException) { _message = "Upgrade operation cancelled."; }
+        catch (Exception ex) { _message = $"Upgrade operation error: {ex.Message}"; }
+        finally { _upgrading = null; _installCts?.Dispose(); _installCts = null; }
     }
-
-    private static string TrimOutput(string output) =>
-        output.Length <= 500 ? output : output[..500] + "...";
 }

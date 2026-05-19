@@ -10,28 +10,32 @@
         <p>Load prior sessions from the local SQLite database.</p>
     </header>
     <section class="panel">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+        <div class="panel-title-row">
+            <div>
+                <h2>Recent sessions</h2>
+                <p class="muted">Reload saved scan summaries and open their results.</p>
+            </div>
             <button @onclick="Load">Reload recent</button>
-            @if (_loaded && !State.Sessions.Any())
-            {
-                <span class="muted">No saved sessions found.</span>
-            }
         </div>
         @if (State.Sessions.Any())
         {
             <div class="session-list">
                 @foreach (var session in State.Sessions)
                 {
-                    <button class="session-row" @onclick="() => Open(session.SessionId)">
+                    <button class="session-row @ModeClass(session.ActionMode.ToString())" @onclick="() => Open(session.SessionId)">
+                        <span class="session-mode">@FormatMode(session.ActionMode.ToString())</span>
                         <strong>@session.StartedUtc.LocalDateTime.ToString("g")</strong>
-                        <span>@FormatMode(session.ActionMode.ToString()) — @session.SourcePath</span>
+                        <span>@session.SourcePath</span>
                     </button>
                 }
             </div>
         }
-        else if (!_loaded)
+        else
         {
-            <p class="muted empty-state">Click "Reload recent" to list saved scan sessions.</p>
+            <div class="empty-state history-empty">
+                <strong>@(_loaded ? "No saved sessions found." : "Saved scans will appear here.")</strong>
+                <span>@(_loaded ? "Run a scan to create a restorable session." : "Reload recent to query the local session database.")</span>
+            </div>
         }
     </section>
 </div>
@@ -70,5 +74,13 @@
         "CopySorted"           => "Copy sorted",
         "CopySortedAndBackup"  => "Copy + backup",
         _                      => mode ?? "Unknown"
+    };
+
+    private static string ModeClass(string? mode) => mode switch
+    {
+        "DryRun"               => "mode-log",
+        "CopySorted"           => "mode-write",
+        "CopySortedAndBackup"  => "mode-backup",
+        _                      => "mode-unknown"
     };
 }

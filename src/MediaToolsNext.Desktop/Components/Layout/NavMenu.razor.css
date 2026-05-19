@@ -18,6 +18,7 @@
 .top-row {
     min-height: 3.5rem;
     background: linear-gradient(135deg, #06121f, #12343b);
+    padding: 0 1rem;
 }
 
 .navbar-brand {
@@ -106,6 +107,8 @@
 .nav-item {
     font-size: 0.9rem;
     padding-bottom: 0.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
 }
 
 .nav-section {
@@ -113,8 +116,15 @@
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0;
+    border-top: 1px solid rgba(255, 255, 255, .10);
+    margin-top: .75rem;
     padding: 1rem 1rem 0.35rem;
     text-transform: uppercase;
+}
+
+.nav-section:first-child {
+    border-top: 0;
+    margin-top: .25rem;
 }
 
 .nav-item:first-of-type {
@@ -128,7 +138,8 @@
 .nav-item ::deep .nav-link {
     color: #d9e8ef;
     background: none;
-    border: none;
+    border: 1px solid transparent;
+    border-left: 4px solid transparent;
     border-radius: 8px;
     height: 3rem;
     display: flex;
@@ -141,7 +152,8 @@
 .nav-item ::deep a.active {
     background-color: rgba(80, 227, 194, 0.18);
     color: #ffffff;
-    box-shadow: inset 3px 0 0 #50e3c2;
+    border-left-color: #50e3c2;
+    box-shadow: inset 6px 0 18px rgba(80, 227, 194, .16), 0 0 18px rgba(80, 227, 194, .12);
 }
 
 .nav-item ::deep .nav-link:hover {
@@ -189,7 +201,23 @@
 .nav-sub ::deep .nav-link {
     height: 2.35rem;
     line-height: 2.35rem;
-    padding-left: 1.65rem;
+    padding-left: 1.55rem;
+    position: relative;
+}
+
+.nav-sub ::deep .nav-link::before {
+    background: #8fb4c0;
+    border-radius: 999px;
+    content: "";
+    height: 7px;
+    left: .55rem;
+    position: absolute;
+    width: 7px;
+}
+
+.nav-sub ::deep .nav-link.active::before {
+    background: #50e3c2;
+    box-shadow: 0 0 10px rgba(80, 227, 194, .7);
 }
 
 /* About button — same style as nav links */

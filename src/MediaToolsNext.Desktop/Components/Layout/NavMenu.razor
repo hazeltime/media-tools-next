@@ -1,4 +1,4 @@
-<div class="top-row ps-3 navbar navbar-dark">
+<div class="top-row navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">Media Tools Next</a>
     </div>
@@ -9,19 +9,19 @@
 <div id="nav-scrollable" class="nav-scrollable" onclick="if(window.innerWidth < 641) document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
         <div class="nav-section">Workflow</div>
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="configure">
                 <span class="bi bi-folder-nav-menu" aria-hidden="true"></span> Configure
             </NavLink>
         </div>
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="run">
                 <span class="bi bi-play-nav-menu" aria-hidden="true"></span> Run
             </NavLink>
         </div>
 
         <div class="nav-section">Review</div>
-        <div class="nav-item px-3 nav-result-root">
+        <div class="nav-item nav-result-root">
             <button type="button" class="nav-tree-toggle" title="@(_resultsOpen ? "Collapse results" : "Expand results")" @onclick="() => _resultsOpen = !_resultsOpen" @onclick:stopPropagation>
                 <span class="bi @(_resultsOpen ? "bi-chevron-down-nav-menu" : "bi-chevron-right-nav-menu")" aria-hidden="true"></span>
             </button>
@@ -31,39 +31,39 @@
         </div>
         @if (_resultsOpen)
         {
-            <div class="nav-item px-3 nav-sub">
+            <div class="nav-item nav-sub">
                 <NavLink class="nav-link nav-link-sub" href="results/valid"><span class="bi bi-valid-nav-menu" aria-hidden="true"></span> Valid</NavLink>
             </div>
-            <div class="nav-item px-3 nav-sub">
+            <div class="nav-item nav-sub">
                 <NavLink class="nav-link nav-link-sub" href="results/corrupt"><span class="bi bi-corrupt-nav-menu" aria-hidden="true"></span> Corrupt</NavLink>
             </div>
-            <div class="nav-item px-3 nav-sub">
+            <div class="nav-item nav-sub">
                 <NavLink class="nav-link nav-link-sub" href="results/unknown"><span class="bi bi-unknown-nav-menu" aria-hidden="true"></span> Unknown</NavLink>
             </div>
-            <div class="nav-item px-3 nav-sub">
+            <div class="nav-item nav-sub">
                 <NavLink class="nav-link nav-link-sub" href="results/error"><span class="bi bi-error-nav-menu" aria-hidden="true"></span> Error</NavLink>
             </div>
-            <div class="nav-item px-3 nav-sub">
+            <div class="nav-item nav-sub">
                 <NavLink class="nav-link nav-link-sub" href="results/skipped"><span class="bi bi-skipped-nav-menu" aria-hidden="true"></span> Skipped</NavLink>
             </div>
         }
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="history">
                 <span class="bi bi-clock-nav-menu" aria-hidden="true"></span> Saved scans
             </NavLink>
         </div>
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="tools">
                 <span class="bi bi-tools-nav-menu" aria-hidden="true"></span> Tools
             </NavLink>
         </div>
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="help">
                 <span class="bi bi-help-nav-menu" aria-hidden="true"></span> Help
             </NavLink>
         </div>
 
-        <div class="nav-item px-3 nav-about-item">
+        <div class="nav-item nav-about-item">
             <button class="nav-link nav-about-btn" @onclick="() => _aboutOpen = true">
                 <span class="bi bi-info-nav-menu" aria-hidden="true"></span> About
             </button>

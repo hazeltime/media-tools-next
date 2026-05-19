@@ -11,6 +11,8 @@ main {
 
 .sidebar {
     background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    border-right: 1px solid rgba(255, 255, 255, .14);
+    box-shadow: 8px 0 24px rgba(16, 32, 43, .08);
 }
 
 @media (min-width: 641px) {
@@ -26,7 +28,7 @@ main {
     }
 
     article {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
+        padding-left: 2rem;
+        padding-right: 1.5rem;
     }
 }
