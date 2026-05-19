@@ -14,5 +14,7 @@ TestResults/
 *.log
 *.tmp
 MediaToolsNext.exe
+MediaToolsNext.Web.exe
 publish-root/
+publish-web/
 publish-linux-cli/

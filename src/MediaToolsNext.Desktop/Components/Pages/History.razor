@@ -62,7 +62,7 @@
                             </div>
                             <span class="session-path" title="@session.SourcePath">@TruncatePath(session.SourcePath)</span>
                         </div>
-                        <button class="session-delete" @onclick="@(e => { e.StopPropagation(); DeleteSession(session.SessionId); })" aria-label="Delete session from @session.StartedUtc.LocalDateTime.ToString("g")" title="Delete this session">
+                        <button class="session-delete" @onclick="@(() => DeleteSession(session.SessionId))" @onclick:stopPropagation aria-label="Delete session from @session.StartedUtc.LocalDateTime.ToString("g")" title="Delete this session">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
                     </div>
@@ -79,7 +79,7 @@
                 <span>@(_loaded ? "Run a scan to create a restorable session." : "Reload recent to query the local session database.")</span>
                 @if (_loaded)
                 {
-                    <button class="btn-primary" @onclick="() => Nav.NavigateTo("/run")" aria-label="Go to Run page to start a scan">Run a scan</button>
+                    <button class="btn-primary" @onclick="NavToRun" aria-label="Go to Run page to start a scan">Run a scan</button>
                 }
             </div>
         }
@@ -155,6 +155,8 @@
         State.LoadSession(session, results, summary);
         Nav.NavigateTo("/results");
     }
+
+    private void NavToRun() => Nav.NavigateTo("/run");
 
     private async Task DeleteSession(Guid id)
     {
@@ -244,12 +246,12 @@
     {
         public static SessionOutcome FromSummary(ScanSummary summary)
         {
-            if (summary.TotalFiles == 0)
+            if (summary.Total == 0)
                 return new("Empty", "outcome-empty");
 
-            var corrupt = summary.StatusCounts.GetValueOrDefault(ValidationStatus.Corrupt, 0);
-            var errors = summary.StatusCounts.GetValueOrDefault(ValidationStatus.Error, 0);
-            var unknown = summary.StatusCounts.GetValueOrDefault(ValidationStatus.Unknown, 0);
+            var corrupt = summary.Corrupt;
+            var errors = summary.Errors;
+            var unknown = summary.Unknown;
 
             if (corrupt > 0 || errors > 0)
                 return new($"⚠ {corrupt + errors} issues", "outcome-warning");
