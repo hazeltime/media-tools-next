@@ -65,7 +65,7 @@
             {
                 <label class="choice confirm cfg-confirm">
                     <input type="checkbox" @bind="State.ConfirmedLiveMode" />
-                    I understand this mode writes files and move mode removes originals after a successful write.
+                    I understand this mode writes files@(State.ActionOperation == FileActionOperation.Move ? " and move mode removes originals after a successful write." : ".")
                 </label>
             }
 

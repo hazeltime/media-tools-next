@@ -138,10 +138,9 @@
                 <button class="secondary" disabled="@(!_pagedRows.Any())" @onclick="SelectPage">Select page</button>
                 <button class="secondary" disabled="@(!_visibleRows.Any())" @onclick="SelectFiltered">Select filtered</button>
                 <button class="secondary" disabled="@(_selectedKeys.Count == 0)" @onclick="ClearSelection">Clear selection</button>
-                <button disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Copy, OutputPathLayout.PreserveRelativePath)">Copy relative</button>
-                <button disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Copy, OutputPathLayout.Flat)">Copy flat</button>
-                <button class="danger" disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Move, OutputPathLayout.PreserveRelativePath)">Move relative</button>
-                <button class="danger" disabled="@(_selectedKeys.Count == 0)" @onclick="() => WriteSelectedAsync(FileActionOperation.Move, OutputPathLayout.Flat)">Move flat</button>
+                <button class="@(State.ActionOperation == FileActionOperation.Move ? "danger" : "")" disabled="@(_selectedKeys.Count == 0)" @onclick="WriteSelectedWithConfigAsync">
+                    @(State.ActionOperation == FileActionOperation.Move ? "Move" : "Copy") selected
+                </button>
             </div>
             <p class="muted">@_selectedKeys.Count.ToString("N0") selected. Batch writes use the filtered source paths and keep current result rows unchanged.</p>
         </section>
@@ -506,28 +505,41 @@
         RebuildCache();
     }
 
-    private async Task WriteSelectedAsync(FileActionOperation operation, OutputPathLayout layout)
+    private async Task WriteSelectedWithConfigAsync()
     {
-        var destination = await Picker.PickFolderAsync($"{operation} selected files", State.TargetRoot);
+        var destination = await Picker.PickFolderAsync($"{State.ActionOperation} selected files", State.TargetRoot);
         if (string.IsNullOrWhiteSpace(destination)) return;
+
         var selected = State.Results.Where(r => _selectedKeys.Contains(RowKey(r))).ToList();
-        var written = 0;
-        foreach (var row in selected)
+        var operation = State.ActionOperation;
+        var layout = State.OutputPathLayout;
+
+        State.Message = $"{operation}ing {selected.Count:N0} files...";
+        State.NotifyChanged();
+
+        var written = await Task.Run(() =>
         {
-            if (!File.Exists(row.Candidate.FullPath)) continue;
-            var target = BuildManualTarget(destination, row, layout);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            target = GetSafePath(target);
-            if (operation == FileActionOperation.Copy)
+            var count = 0;
+            foreach (var row in selected)
             {
-                File.Copy(row.Candidate.FullPath, target);
+                if (!File.Exists(row.Candidate.FullPath)) continue;
+                var target = BuildManualTarget(destination, row, layout);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                target = GetSafePath(target);
+
+                if (operation == FileActionOperation.Copy)
+                {
+                    File.Copy(row.Candidate.FullPath, target);
+                }
+                else
+                {
+                    File.Move(row.Candidate.FullPath, target);
+                }
+                count++;
             }
-            else
-            {
-                File.Move(row.Candidate.FullPath, target);
-            }
-            written++;
-        }
+            return count;
+        });
+
         State.Message = $"{operation} completed for {written:N0} selected files.";
         State.NotifyChanged();
     }

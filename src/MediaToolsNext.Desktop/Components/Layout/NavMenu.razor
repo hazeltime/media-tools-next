@@ -6,11 +6,11 @@
 
 <input type="checkbox" title="Navigation menu" aria-label="Toggle navigation menu" aria-controls="nav-scrollable" class="navbar-toggler" />
 
-<div id="nav-scrollable" class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+<div id="nav-scrollable" class="nav-scrollable" onclick="if(window.innerWidth < 641) document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
         <div class="nav-section">Workflow</div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <NavLink class="nav-link" href="configure">
                 <span class="bi bi-folder-nav-menu" aria-hidden="true"></span> Configure
             </NavLink>
         </div>

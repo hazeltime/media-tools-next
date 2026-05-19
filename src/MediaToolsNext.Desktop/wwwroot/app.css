@@ -640,7 +640,7 @@ th { color: var(--c-muted); font-size: 12px; text-transform: uppercase; }
     text-transform: uppercase;
 }
 .result-group-heading span { color: var(--c-muted); font-size: 12px; }
-.results-workspace:focus { outline: none; }
+.results-workspace:focus { outline: 2px solid var(--c-accent); outline-offset: -2px; }
 .results-actions { padding: 10px 12px; }
 .select-col { width: 42px; }
 .current-row { background: #ecfeff; outline: 2px solid rgba(15,118,110,.22); }
