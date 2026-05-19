@@ -40,6 +40,8 @@ dotnet build src\MediaToolsNext.Cli\MediaToolsNext.Cli.csproj
 dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0-windows10.0.19041.0
 ```
 
+CI runs the same checks on `windows-latest` for pushes and pull requests to `main`.
+
 Collect coverage:
 
 ```powershell
@@ -69,3 +71,19 @@ Use `--flat`, `--move`, and `--group-category` to change write layout and operat
 ## Desktop
 
 The desktop app starts at `MainPage` and walks through the scan workflow in the app itself. By default it stores the SQLite database under `%LocalAppData%\media-tools-next\media-tools-next.db`.
+
+## Development Checkpoints
+
+Prefer small checkpoints that can be verified independently:
+
+```powershell
+git status --short --branch
+dotnet test tests\MediaToolsNext.Tests\MediaToolsNext.Tests.csproj --no-restore
+dotnet test tests\MediaToolsNext.Desktop.Tests\MediaToolsNext.Desktop.Tests.csproj --no-restore
+dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0-windows10.0.19041.0 --no-restore
+git diff --check
+git commit -m "<focused change>"
+git push origin main
+```
+
+Run narrower tests first when a change is local to one component, then run the broader checks before pushing.

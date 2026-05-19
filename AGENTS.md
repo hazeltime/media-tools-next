@@ -81,9 +81,16 @@ Use this repo guidance to reduce token, API, and quota usage while preserving qu
 - Workers should run only narrow checks for their owned area.
 - The orchestrator should run broader final verification once when the change spans multiple projects or shared contracts:
   - `dotnet test tests\MediaToolsNext.Tests\MediaToolsNext.Tests.csproj --no-restore`
+  - `dotnet test tests\MediaToolsNext.Desktop.Tests\MediaToolsNext.Desktop.Tests.csproj --no-restore`
   - `dotnet build src\MediaToolsNext.Cli\MediaToolsNext.Cli.csproj --no-restore`
   - `dotnet build src\MediaToolsNext.Infrastructure\MediaToolsNext.Infrastructure.csproj --no-restore`
   - `dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0-windows10.0.19041.0 --no-restore`
+
+### Checkpoints
+
+- Commit and push after each focused, verified task when working directly on `main`.
+- Keep checkpoint commits narrow: one cleanup, bug fix, test addition, docs update, package update, or CI change per commit.
+- Before pushing, run `git diff --check` and the smallest test/build set that exercises the change.
 
 ### Scope Control
 
