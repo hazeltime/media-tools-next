@@ -108,6 +108,42 @@ public class ScanWorkflowStateTests
         finally { Directory.Delete(source, true); }
     }
 
+    [Fact]
+    public void PreflightReportsInvalidLimitsRegexAndMissingEnabledExtensions()
+    {
+        var source = NewTempDir();
+        try
+        {
+            var state = new ScanWorkflowState
+            {
+                SourcePath = source,
+                CustomImageRegex = "[",
+                Concurrency = 0,
+                ToolTimeoutSeconds = 4,
+                ProbeSeconds = 9,
+                MaxRuntimeSeconds = -1,
+                MaxMatchedFiles = -1,
+                MaxMatchedMb = -1,
+                MinFileKb = 2049,
+                MaxFileMb = 2
+            };
+            state.SelectNoExtensions(MediaCategory.Image);
+
+            var errors = state.PreflightErrors().ToArray();
+
+            Assert.Contains("Custom image regex is invalid.", errors);
+            Assert.Contains("Concurrency must be between 1 and 32.", errors);
+            Assert.Contains("Tool timeout must be between 5 and 600 seconds.", errors);
+            Assert.Contains("Media probe seconds must be between 10 and 600.", errors);
+            Assert.Contains("Max scan time cannot be negative.", errors);
+            Assert.Contains("Max matched files cannot be negative.", errors);
+            Assert.Contains("Max total matched MB cannot be negative.", errors);
+            Assert.Contains("Minimum file size cannot exceed maximum file size.", errors);
+            Assert.Contains("Select at least one default extension for an enabled file family, or add a custom image type.", errors);
+        }
+        finally { Directory.Delete(source, true); }
+    }
+
     private static string NewTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), "media-tools-next-desktop-tests-" + Guid.NewGuid());
