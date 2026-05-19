@@ -15,4 +15,4 @@ TestResults/
 *.tmp
 MediaToolsNext.exe
 publish-root/
-
+publish-linux-cli/

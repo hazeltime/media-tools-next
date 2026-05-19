@@ -72,6 +72,28 @@ Use `--flat`, `--move`, and `--group-category` to change write layout and operat
 
 The desktop app starts at `MainPage` and walks through the scan workflow in the app itself. By default it stores the SQLite database under `%LocalAppData%\media-tools-next\media-tools-next.db`.
 
+## Publish
+
+Create the Windows desktop payload and repository-root launcher:
+
+```powershell
+.\publish-root-exe.ps1
+```
+
+Create an Ubuntu/Linux CLI build:
+
+```powershell
+.\publish-root-exe.ps1 -Target LinuxCli -Configuration Release
+```
+
+Create both outputs:
+
+```powershell
+.\publish-root-exe.ps1 -Target All -Configuration Release
+```
+
+Linux output is written to `publish-linux-cli\<runtime>`. The default runtime is `linux-x64`; pass `-LinuxRuntime linux-arm64` for ARM64 Linux. The Linux target publishes the CLI only because the MAUI desktop app has no Linux desktop target.
+
 ## Development Checkpoints
 
 Prefer small checkpoints that can be verified independently:
