@@ -73,7 +73,6 @@
     private static readonly ValidationStatus[] Copyable = [ValidationStatus.Valid, ValidationStatus.Corrupt, ValidationStatus.Unknown, ValidationStatus.Error];
     private void Toggle(ValidationStatus status, bool enabled)
     {
-        if (enabled) State.CopyStatuses.Add(status);
-        else State.CopyStatuses.Remove(status);
+        State.ToggleCopyStatus(status, enabled);
     }
 }

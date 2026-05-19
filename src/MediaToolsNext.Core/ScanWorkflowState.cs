@@ -369,6 +369,13 @@ public sealed class ScanWorkflowState
         NotifyChanged();
     }
 
+    public void ToggleCopyStatus(ValidationStatus status, bool enabled)
+    {
+        if (enabled) CopyStatuses.Add(status);
+        else CopyStatuses.Remove(status);
+        NotifyChanged();
+    }
+
     public void SelectAllExtensions(MediaCategory category)
     {
         foreach (var extension in SupportedMedia.GetExtensions(category))

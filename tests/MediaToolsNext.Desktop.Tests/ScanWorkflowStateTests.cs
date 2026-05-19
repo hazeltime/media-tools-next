@@ -74,6 +74,20 @@ public class ScanWorkflowStateTests
     }
 
     [Fact]
+    public void ToggleCopyStatusMutatesSetAndNotifiesSubscribers()
+    {
+        var state = new ScanWorkflowState();
+        var changed = 0;
+        state.Changed += () => changed++;
+
+        state.ToggleCopyStatus(ValidationStatus.Valid, enabled: false);
+        state.ToggleCopyStatus(ValidationStatus.Valid, enabled: true);
+
+        Assert.Contains(ValidationStatus.Valid, state.CopyStatuses);
+        Assert.Equal(2, changed);
+    }
+
+    [Fact]
     public void PreflightRequiresTargetAndBackupOnlyForWriteModes()
     {
         var source = NewTempDir();

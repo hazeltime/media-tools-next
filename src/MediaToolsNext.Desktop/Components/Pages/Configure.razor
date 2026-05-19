@@ -355,8 +355,7 @@
 
     private void Toggle(ValidationStatus status, bool enabled)
     {
-        if (enabled) State.CopyStatuses.Add(status);
-        else         State.CopyStatuses.Remove(status);
+        State.ToggleCopyStatus(status, enabled);
     }
 
     private void Defaults() { State.MaxRuntimeSeconds = 30; State.MaxMatchedFiles = 10000; State.MaxMatchedMb = 10240; }
