@@ -301,7 +301,7 @@ public class DiscoveryAndActionTests
             File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
             File.WriteAllText(Path.Combine(root, "B_stop.jpg"), "12345");
             var searched = 0;
-            var progress = new Progress<ScanDiscoveryEvent>(e =>
+            var progress = new SyncProgress<ScanDiscoveryEvent>(e =>
             {
                 if (e.Type == DiscoveryEventType.Searched)
                     searched++;
@@ -657,5 +657,10 @@ public class DiscoveryAndActionTests
         var path = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private sealed class SyncProgress<T>(Action<T> handler) : IProgress<T>
+    {
+        public void Report(T value) => handler(value);
     }
 }
