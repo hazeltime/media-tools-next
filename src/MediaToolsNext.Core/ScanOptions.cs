@@ -11,7 +11,7 @@ public sealed record ScanOptions(
     bool EnableDocuments,
     int MaxConcurrency,
     int MediaProbeSeconds,
-    string DatabasePath,
+    string DatabasePath = "",
     ValidationDepth ValidationDepth = ValidationDepth.Standard,
     int MaxRetries = 1,
     int? MaxFiles = null,
@@ -42,7 +42,7 @@ public sealed record ScanOptions(
     IReadOnlySet<string>? EnabledExtensions = null,
     int CopyBufferBytes = 1024 * 1024)
 {
-    public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath) =>
+    public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath = "") =>
         new(
             sourcePath,
             targetRoot,
@@ -54,7 +54,7 @@ public sealed record ScanOptions(
             EnableDocuments: true,
             MaxConcurrency: 8,
             MediaProbeSeconds: 120,
-            databasePath);
+            DatabasePath: databasePath);
 }
 
 public sealed class ScanLimitState

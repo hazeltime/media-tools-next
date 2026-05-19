@@ -7,6 +7,8 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
 {
     private const string TimestampFormat = "O";
 
+    private readonly System.Threading.SemaphoreSlim _writeLock = new(1, 1);
+
     private readonly string _connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
     private string ConnectionString => _connectionString;
 
@@ -21,73 +23,97 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
-        await using var connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        using (var pragmaCommand = connection.CreateCommand())
+        await _writeLock.WaitAsync(cancellationToken);
+        try
         {
-            // WAL is persistent for the database file, so set it once during
-            // initialization instead of on every connection open.
-            pragmaCommand.CommandText = "PRAGMA journal_mode=WAL;";
-            await pragmaCommand.ExecuteNonQueryAsync(cancellationToken);
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
+            await using var connection = new SqliteConnection(ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            using (var pragmaCommand = connection.CreateCommand())
+            {
+                // WAL is persistent for the database file, so set it once during
+                // initialization instead of on every connection open.
+                pragmaCommand.CommandText = "PRAGMA journal_mode=WAL;";
+                await pragmaCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+            await ConfigureConnectionAsync(connection, cancellationToken);
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id TEXT PRIMARY KEY,
+                    source_path TEXT NOT NULL,
+                    target_root TEXT NOT NULL,
+                    backup_root TEXT NULL,
+                    action_mode TEXT NOT NULL,
+                    started_utc TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS results (
+                    session_id TEXT NOT NULL,
+                    full_path TEXT NOT NULL,
+                    relative_path TEXT NOT NULL,
+                    extension TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    last_write_utc TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    validator TEXT NOT NULL,
+                    detail TEXT NULL,
+                    action TEXT NOT NULL,
+                    primary_target TEXT NULL,
+                    backup_target TEXT NULL,
+                    timestamp_utc TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_results_session_id ON results (session_id);
+                CREATE INDEX IF NOT EXISTS idx_results_full_path ON results (full_path, size_bytes, last_write_utc);
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
-        await ConfigureConnectionAsync(connection, cancellationToken);
-        var command = connection.CreateCommand();
-        command.CommandText = """
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                source_path TEXT NOT NULL,
-                target_root TEXT NOT NULL,
-                backup_root TEXT NULL,
-                action_mode TEXT NOT NULL,
-                started_utc TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS results (
-                session_id TEXT NOT NULL,
-                full_path TEXT NOT NULL,
-                relative_path TEXT NOT NULL,
-                extension TEXT NOT NULL,
-                category TEXT NOT NULL,
-                size_bytes INTEGER NOT NULL,
-                last_write_utc TEXT NOT NULL,
-                status TEXT NOT NULL,
-                validator TEXT NOT NULL,
-                detail TEXT NULL,
-                action TEXT NOT NULL,
-                primary_target TEXT NULL,
-                backup_target TEXT NULL,
-                timestamp_utc TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_results_session_id ON results (session_id);
-            CREATE INDEX IF NOT EXISTS idx_results_full_path ON results (full_path, size_bytes, last_write_utc);
-            """;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     public async Task<Guid> CreateSessionAsync(ScanOptions options, CancellationToken cancellationToken)
     {
         var id = Guid.NewGuid();
-        await using var connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        await ConfigureConnectionAsync(connection, cancellationToken);
-        var command = connection.CreateCommand();
-        command.CommandText = "INSERT INTO sessions VALUES ($id,$source,$target,$backup,$mode,$started)";
-        command.Parameters.AddWithValue("$id", id.ToString());
-        command.Parameters.AddWithValue("$source", options.SourcePath);
-        command.Parameters.AddWithValue("$target", options.TargetRoot);
-        command.Parameters.AddWithValue("$backup", (object?)options.BackupRoot ?? DBNull.Value);
-        command.Parameters.AddWithValue("$mode", options.ActionMode.ToString());
-        command.Parameters.AddWithValue("$started", DateTimeOffset.UtcNow.ToString(TimestampFormat));
-        await command.ExecuteNonQueryAsync(cancellationToken);
-        return id;
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = new SqliteConnection(ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            await ConfigureConnectionAsync(connection, cancellationToken);
+            var command = connection.CreateCommand();
+            command.CommandText = "INSERT INTO sessions VALUES ($id,$source,$target,$backup,$mode,$started)";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.Parameters.AddWithValue("$source", options.SourcePath);
+            command.Parameters.AddWithValue("$target", options.TargetRoot);
+            command.Parameters.AddWithValue("$backup", (object?)options.BackupRoot ?? DBNull.Value);
+            command.Parameters.AddWithValue("$mode", options.ActionMode.ToString());
+            command.Parameters.AddWithValue("$started", DateTimeOffset.UtcNow.ToString(TimestampFormat));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            return id;
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     public async Task SaveResultAsync(ScanResultRecord result, CancellationToken cancellationToken)
     {
-        await using var connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        await ConfigureConnectionAsync(connection, cancellationToken);
-        await InsertResultAsync(connection, result, cancellationToken);
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = new SqliteConnection(ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            await ConfigureConnectionAsync(connection, cancellationToken);
+            await InsertResultAsync(connection, result, cancellationToken);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     /// <summary>
@@ -96,13 +122,21 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
     /// </summary>
     public async Task BatchSaveResultsAsync(IEnumerable<ScanResultRecord> results, CancellationToken cancellationToken)
     {
-        await using var connection = new SqliteConnection(ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        await ConfigureConnectionAsync(connection, cancellationToken);
-        await using var tx = await connection.BeginTransactionAsync(cancellationToken);
-        foreach (var result in results)
-            await InsertResultAsync(connection, result, cancellationToken, tx as SqliteTransaction);
-        await tx.CommitAsync(cancellationToken);
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = new SqliteConnection(ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            await ConfigureConnectionAsync(connection, cancellationToken);
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            foreach (var result in results)
+                await InsertResultAsync(connection, result, cancellationToken, tx as SqliteTransaction);
+            await tx.CommitAsync(cancellationToken);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     private static async Task InsertResultAsync(

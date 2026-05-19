@@ -126,6 +126,49 @@ public class SqliteStoreTests
         Assert.Equal(["first.txt", "second.txt", "third.txt"], listed.Select(x => x.Candidate.RelativePath).ToArray());
     }
 
+    [Fact]
+    public async Task BatchSaveResultsConcurrentAndRepeatedWrites()
+    {
+        using var temp = TestTempDirectory.Create();
+        var db = Path.Combine(temp.Path, "state.db");
+        var store = new SqliteScanStore(db);
+        var options = ScanOptions.CreateDefault(temp.Path, Path.Combine(temp.Path, "target"), db);
+        await store.InitializeAsync(CancellationToken.None);
+        var session = await store.CreateSessionAsync(options, CancellationToken.None);
+
+        // 1. Repeated batch writes (sequential)
+        var records1 = new[] { CreateRecord(session, temp.Path, "dup.txt", ValidationStatus.Valid) };
+        var records2 = new[] { CreateRecord(session, temp.Path, "dup.txt", ValidationStatus.Valid) };
+        await store.BatchSaveResultsAsync(records1, CancellationToken.None);
+        await store.BatchSaveResultsAsync(records2, CancellationToken.None);
+
+        var listed = await store.ListResultsAsync(session, CancellationToken.None);
+        Assert.Equal(2, listed.Count);
+
+        // 2. High concurrency writes (parallel threads calling SaveResultAsync and BatchSaveResultsAsync)
+        var tasks = new List<Task>();
+        for (int i = 0; i < 10; i++)
+        {
+            var fileName = $"file_{i}.txt";
+            tasks.Add(Task.Run(async () =>
+            {
+                var record = CreateRecord(session, temp.Path, fileName, ValidationStatus.Valid);
+                await store.SaveResultAsync(record, CancellationToken.None);
+            }));
+            tasks.Add(Task.Run(async () =>
+            {
+                var batch = new[] { CreateRecord(session, temp.Path, $"batch_{i}.txt", ValidationStatus.Valid) };
+                await store.BatchSaveResultsAsync(batch, CancellationToken.None);
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        var allResults = await store.ListResultsAsync(session, CancellationToken.None);
+        // We wrote 2 (dup.txt) + 10 (single save) + 10 (batch save) = 22 rows
+        Assert.Equal(22, allResults.Count);
+    }
+
     private static ScanResultRecord CreateRecord(Guid session, string root, string fileName, ValidationStatus status, DateTimeOffset? timestamp = null)
     {
         var candidate = new FileCandidate(Path.Combine(root, fileName), fileName, ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
