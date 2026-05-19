@@ -12,7 +12,7 @@
         <p>Preview first, then scan when preflight is clean.</p>
     </header>
 
-    @if (!string.IsNullOrWhiteSpace(State.Message)) { <div class="notice">@State.Message</div> }
+    @if (!string.IsNullOrWhiteSpace(State.Message)) { <div class="notice notice-visible">@State.Message</div> }
 
     <section class="run-control-grid">
         <div class="panel run-preflight">
@@ -54,17 +54,17 @@
             <div class="progress-strip">
                 <div class="progress-metric @(State.IsScanning ? "active" : "idle")">
                     <span><strong>Time</strong><em>@ProgressLabel(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds)</em></span>
-                    <div class="progress-track"><div class="progress-fill" style="transform:scaleX(@ProgressScale(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds))"></div></div>
+                    <div class="progress-track"><div class="progress-fill" style="--progress:@(ProgressScale(State.Elapsed.TotalSeconds, State.MaxRuntimeSeconds))"></div></div>
                     <div class="progress-meta"><span>Elapsed <strong>@FormatElapsed(State.Elapsed)</strong></span><span>Remaining <strong>@(State.Remaining.HasValue ? FormatElapsed(State.Remaining.Value) : "-")</strong></span></div>
                 </div>
                 <div class="progress-metric @(State.IsScanning ? "active" : "idle")">
                     <span><strong>Matched files</strong><em>@ProgressLabel(State.Results.Count, State.MaxMatchedFiles)</em></span>
-                    <div class="progress-track"><div class="progress-fill" style="transform:scaleX(@ProgressScale(State.Results.Count, State.MaxMatchedFiles))"></div></div>
+                    <div class="progress-track"><div class="progress-fill" style="--progress:@(ProgressScale(State.Results.Count, State.MaxMatchedFiles))"></div></div>
                     <div class="progress-meta"><span>Current <strong>@State.Results.Count.ToString("N0")</strong></span><span>Limit <strong>@(State.MaxMatchedFiles == 0 ? "Off" : State.MaxMatchedFiles.ToString("N0"))</strong></span></div>
                 </div>
                 <div class="progress-metric @(State.IsScanning ? "active" : "idle")">
                     <span><strong>Matched MB</strong><em>@ProgressLabel(State.MatchedMb, State.MaxMatchedMb)</em></span>
-                    <div class="progress-track"><div class="progress-fill" style="transform:scaleX(@ProgressScale(State.MatchedMb, State.MaxMatchedMb))"></div></div>
+                    <div class="progress-track"><div class="progress-fill" style="--progress:@(ProgressScale(State.MatchedMb, State.MaxMatchedMb))"></div></div>
                     <div class="progress-meta"><span>Current <strong>@State.MatchedMb.ToString("N1")</strong></span><span>Limit <strong>@(State.MaxMatchedMb == 0 ? "Off" : State.MaxMatchedMb.ToString("N0"))</strong></span></div>
                 </div>
             </div>
@@ -142,6 +142,8 @@
         </section>
     }
 
+    @if (State.Results.Any() || State.Preview is not null)
+    {
     <section class="panel skip-breakdown-panel">
         <div class="panel-title-row">
             <div>
@@ -160,19 +162,26 @@
             <div class="skip-item muted-skip"><span>Excluded path</span><strong>n/a</strong><small>Not tracked separately in current scan state</small></div>
         </div>
     </section>
+    }
 
+    @if (State.Preview is not null || State.Results.Any())
+    {
     <section class="summary-grid">
         <div><strong>@(State.Preview?.TotalFiles ?? 0)</strong><span>Preview files</span></div>
         <div><strong>@(State.Preview?.TotalDirectories ?? 0)</strong><span>Preview folders</span></div>
         <div><strong>@PreviewMb</strong><span>Preview MB</span></div>
         <div><strong>@State.LastCompletionReason</strong><span>Completion</span></div>
     </section>
+    }
 
     <section class="panel run-facts">
         <h2>Current run</h2>
         @if (State.LastRunStartedLocal is null)
         {
-            <p class="muted empty-state">No scan has been run yet in this session.</p>
+            <div class="run-empty-state">
+                <strong>No scans yet</strong>
+                <span>Configure your scan above, then run a preview or start a scan.</span>
+            </div>
         }
         else
         {
