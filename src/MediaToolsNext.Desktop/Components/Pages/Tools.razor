@@ -23,7 +23,7 @@
             </div>
         </div>
         <div class="tool-status-grid">
-            @foreach (var tool in ToolStatuses)
+            @foreach (var tool in _toolStatuses)
             {
                 <div class="tool-status-card @(tool.IsAvailable ? "ok" : "missing")">
                     <div>
@@ -55,8 +55,13 @@
     private string? _installing;
     private string? _upgrading;
     private string? _message;
-    private IReadOnlyList<ToolStatus> ToolStatuses => ToolProbe.GetStatuses();
+    private IReadOnlyList<ToolStatus> _toolStatuses = [];
     private bool IsBusy => _installing is not null || _upgrading is not null;
+
+    protected override void OnInitialized()
+    {
+        LoadToolStatuses();
+    }
 
     private static string ToolState(ToolStatus tool) =>
         tool.IsAvailable ? "Already installed" : "Missing / not installed";
@@ -77,7 +82,13 @@
     private void RefreshTools()
     {
         ToolProbe.Refresh();
+        LoadToolStatuses();
         _message = "Tool status refreshed.";
+    }
+
+    private void LoadToolStatuses()
+    {
+        _toolStatuses = ToolProbe.GetStatuses();
     }
 
     private async Task InstallAsync(string toolName)
@@ -91,6 +102,7 @@
                 ? $"Install command completed: {result.Command}. Refreshed tool status; restart the app if PATH still has not updated."
                 : $"Install failed: {result.Command}. {TrimOutput(result.Output)}";
             ToolProbe.Refresh();
+            LoadToolStatuses();
         }
         finally
         {
@@ -109,6 +121,7 @@
                 ? $"Upgrade check completed: {result.Command}. {TrimOutput(result.Output)}"
                 : $"Upgrade check failed: {result.Command}. {TrimOutput(result.Output)}";
             ToolProbe.Refresh();
+            LoadToolStatuses();
         }
         finally
         {
@@ -122,11 +135,12 @@
         _message = "Checking/upgrading all validator tools...";
         try
         {
-            var result = await Installer.UpgradeAllAsync(ToolStatuses.Select(t => t.Name), CancellationToken.None);
+            var result = await Installer.UpgradeAllAsync(_toolStatuses.Select(t => t.Name), CancellationToken.None);
             _message = result.Success
                 ? $"Upgrade checks completed. {TrimOutput(result.Output)}"
                 : $"One or more upgrade checks failed. {TrimOutput(result.Output)}";
             ToolProbe.Refresh();
+            LoadToolStatuses();
         }
         finally
         {
