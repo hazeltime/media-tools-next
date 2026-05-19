@@ -80,4 +80,37 @@ public class CliScanOptionsBuilderTests
         Assert.Equal(7 * 1048576L, result.Options.MinMatchedBytes);
         Assert.Equal(11 * 1048576L, result.Options.MaxMatchedBytes);
     }
+
+    [Fact]
+    public void BuildRejectsMissingOptionValue()
+    {
+        var hardware = new HardwareProfile(16, 0, "Fixed", "Fixed", 12, 512 * 1024, 90, "test");
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            CliScanOptionsBuilder.Build(["source", "target", "--db", "--live"], hardware, "state.db"));
+
+        Assert.Contains("--db requires a value", ex.Message);
+    }
+
+    [Fact]
+    public void BuildRejectsInvalidIntegerOptionValue()
+    {
+        var hardware = new HardwareProfile(16, 0, "Fixed", "Fixed", 12, 512 * 1024, 90, "test");
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            CliScanOptionsBuilder.Build(["source", "target", "--concurrency", "many"], hardware, "state.db"));
+
+        Assert.Contains("--concurrency must be an integer", ex.Message);
+    }
+
+    [Fact]
+    public void BuildRejectsNegativeIntegerOptionValue()
+    {
+        var hardware = new HardwareProfile(16, 0, "Fixed", "Fixed", 12, 512 * 1024, 90, "test");
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            CliScanOptionsBuilder.Build(["source", "target", "--max-searched-files", "-1"], hardware, "state.db"));
+
+        Assert.Contains("--max-searched-files must be greater than or equal to 1", ex.Message);
+    }
 }

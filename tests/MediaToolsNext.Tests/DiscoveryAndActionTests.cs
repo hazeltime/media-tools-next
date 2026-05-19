@@ -585,7 +585,7 @@ public class DiscoveryAndActionTests
             Assert.StartsWith("move-delete-failed: IOException:", action.Action);
             Assert.Equal(Path.Combine(target, "valid", "a.txt"), action.PrimaryTargetPath);
             Assert.True(File.Exists(source));
-            Assert.Equal(["a.txt"], Directory.GetFiles(Path.Combine(target, "valid")).Select(Path.GetFileName).ToArray());
+            Assert.Equal(["a.txt"], Directory.GetFiles(Path.Combine(target, "valid")).Select(path => Path.GetFileName(path)!).ToArray());
         }
         finally { Directory.Delete(root, true); }
     }

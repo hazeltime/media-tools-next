@@ -10,6 +10,37 @@ public sealed record CliScanOptionsBuildResult(
 
 public static class CliScanOptionsBuilder
 {
+    private static readonly HashSet<string> KnownOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--backup",
+        "--profile",
+        "--export",
+        "--db",
+        "--concurrency",
+        "--probe-seconds",
+        "--max-searched-files",
+        "--max-matched-files",
+        "--max-searched-dirs",
+        "--max-matched-dirs",
+        "--min-runtime-seconds",
+        "--min-scanned-mb",
+        "--max-scanned-mb",
+        "--min-matched-mb",
+        "--max-matched-mb",
+        "--tool-timeout-seconds",
+        "--preview",
+        "--health",
+        "--live",
+        "--move",
+        "--flat",
+        "--group-category",
+        "--help",
+        "-h",
+        "-?",
+        "--version",
+        "-v"
+    };
+
     public static CliScanOptionsBuildResult Build(string[] args, HardwareProfile hardwareProfile, string defaultDatabasePath)
     {
         if (args.Length < 2)
@@ -51,7 +82,7 @@ public static class CliScanOptionsBuilder
             MaxMatchedFiles: IntAfter(args, "--max-matched-files"),
             MaxSearchedDirectories: IntAfter(args, "--max-searched-dirs"),
             MaxMatchedDirectories: IntAfter(args, "--max-matched-dirs"),
-            MinRuntimeBeforeLimitsSeconds: IntAfter(args, "--min-runtime-seconds") ?? 0,
+            MinRuntimeBeforeLimitsSeconds: IntAfter(args, "--min-runtime-seconds", 0) ?? 0,
             MinScannedBytes: MbAfter(args, "--min-scanned-mb"),
             MaxScannedBytes: MbAfter(args, "--max-scanned-mb"),
             MinMatchedBytes: MbAfter(args, "--min-matched-mb"),
@@ -68,11 +99,24 @@ public static class CliScanOptionsBuilder
     private static string? ValueAfter(string[] args, string name)
     {
         var index = Array.IndexOf(args, name);
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+        if (index < 0)
+            return null;
+        if (index + 1 >= args.Length || KnownOptions.Contains(args[index + 1]))
+            throw new ArgumentException($"{name} requires a value.");
+        return args[index + 1];
     }
 
-    private static int? IntAfter(string[] args, string name) =>
-        int.TryParse(ValueAfter(args, name), out var value) && value > 0 ? value : null;
+    private static int? IntAfter(string[] args, string name, int minValue = 1)
+    {
+        var raw = ValueAfter(args, name);
+        if (raw is null)
+            return null;
+        if (!int.TryParse(raw, out var value))
+            throw new ArgumentException($"{name} must be an integer.");
+        if (value < minValue)
+            throw new ArgumentException($"{name} must be greater than or equal to {minValue}.");
+        return value;
+    }
 
     private static long? MbAfter(string[] args, string name) =>
         IntAfter(args, name) is int value ? value * 1048576L : null;
