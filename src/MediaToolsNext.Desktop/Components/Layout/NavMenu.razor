@@ -76,7 +76,7 @@
     <div class="about-overlay" @onclick="() => _aboutOpen = false" role="dialog" aria-modal="true" aria-label="About Media Tools Next">
         <div class="about-box" @onclick:stopPropagation>
             <h2>Media Tools Next</h2>
-            <p class="about-version">v0.1.0.0 alpha</p>
+            <p class="about-version">v@AppVersion</p>
             <div class="about-links">
                 <a href="https://github.com/hazeltime" target="_blank" rel="noopener noreferrer">github.com/hazeltime</a>
                 <a href="mailto:berrat2@gmail.com">berrat2@gmail.com</a>
@@ -89,4 +89,10 @@
 @code {
     private bool _aboutOpen;
     private bool _resultsOpen = true;
+    private static string AppVersion =>
+        typeof(App).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion
+        ?? typeof(App).Assembly.GetName().Version?.ToString()
+        ?? "unknown";
 }

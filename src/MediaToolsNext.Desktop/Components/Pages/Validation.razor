@@ -6,7 +6,7 @@
     <header class="page-header">
         <p class="eyebrow">Step 3</p>
         <h1>Validation depth</h1>
-        <p>Choose how hard the app tries to prove an image is actually readable.</p>
+        <p>Choose how hard the app tries to prove enabled files are readable.</p>
     </header>
 
     <section class="panel">
@@ -25,7 +25,7 @@
         <h2>Tools and performance</h2>
         @if (ToolProbe.GetStatuses().All(t => !t.IsAvailable))
         {
-            <div class="preflight-item error" style="margin-bottom:12px">⚠ No external tools found. Deep validation and media scanning will be limited to header checks only.</div>
+            <div class="preflight-item error" style="margin-bottom:12px">No external tools found. Some media and PDF checks may return unknown or use lighter built-in checks.</div>
         }
         <div class="tool-row" style="margin-bottom:12px">
             @foreach (var tool in ToolProbe.GetStatuses())

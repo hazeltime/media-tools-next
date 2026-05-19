@@ -118,7 +118,7 @@
                     <span class="live-count-label">Error</span>
                     <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Error), State.Results.Count)</span>
                 </div>
-                <div class="live-count skipped" title="Reached pipeline but had no matching validator (category disabled after start, or access-denied stub).">
+                <div class="live-count skipped" title="Reached pipeline but had no matching validator. Access-denied discovery entries are reported as errors.">
                     <span class="live-count-value">@State.GetStatusCount(ValidationStatus.Skipped).ToString("N0")</span>
                     <span class="live-count-label">Skipped</span>
                     <span class="live-count-percent">@Percent(State.GetStatusCount(ValidationStatus.Skipped), State.Results.Count)</span>

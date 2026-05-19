@@ -400,9 +400,9 @@ public sealed class ScanWorkflowState
 
     public static string DepthExplanation(ValidationDepth depth) => depth switch
     {
-        ValidationDepth.Fast     => "Checks file existence, non-zero size, and image header bytes.",
-        ValidationDepth.Standard => "Adds ImageMagick identify -ping when available.",
-        ValidationDepth.Deep     => "Asks ImageMagick to read the image without -ping for stronger corruption detection.",
+        ValidationDepth.Fast     => "Checks file existence, non-zero size, and lightweight file signatures.",
+        ValidationDepth.Standard => "Adds available metadata probes for stronger validation without full decode work.",
+        ValidationDepth.Deep     => "Uses deeper external reads where available for stronger corruption detection.",
         _                        => string.Empty
     };
 

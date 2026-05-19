@@ -5,7 +5,7 @@
     <header class="page-header">
         <p class="eyebrow">Step 2</p>
         <h1>Media and filters</h1>
-        <p>Choose which file families to scan and apply any filename or size filters.</p>
+        <p>Choose which file families to scan and apply filename or size filters shared by all enabled families.</p>
     </header>
 
     <section class="panel">
@@ -58,7 +58,7 @@
         </section>
 
         <section class="panel">
-            <h2>Include filters</h2>
+            <h2>Global file filters</h2>
             <div class="form-grid two">
                 <label>Minimum file size KB <input type="number" min="0" @bind="State.MinFileKb" /></label>
                 <label>Maximum file size MB <input type="number" min="0" @bind="State.MaxFileMb" /></label>

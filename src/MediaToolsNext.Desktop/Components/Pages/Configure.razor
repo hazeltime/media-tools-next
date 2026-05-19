@@ -11,7 +11,7 @@
             <span class="cfg-step">1</span>
             <div>
                 <h2>Setup</h2>
-                <p class="muted">Source folder and write mode. Originals are never modified.</p>
+                <p class="muted">Source folder and write mode. Log-only validation does not modify originals; move mode removes originals after successful writes.</p>
             </div>
         </div>
 
@@ -31,7 +31,7 @@
             <div class="cfg-folders">
                 <label>
                     Source folder
-                    <small>Scanned recursively. Originals are not changed.</small>
+                    <small>Scanned recursively. Validation reads files only; move mode can remove originals after a successful destination write.</small>
                     <div class="input-action">
                         <input @bind="State.SourcePath" />
                         <button @onclick="PickSource">Browse</button>
@@ -200,7 +200,7 @@
                 <h3>Tools &amp; performance</h3>
                 @if (ToolProbe.GetStatuses().All(t => !t.IsAvailable))
                 {
-                    <div class="preflight-item error cfg-tool-warn">⚠ No external tools found. Deep validation will fall back to header checks only.</div>
+                    <div class="preflight-item error cfg-tool-warn">No external tools found. Some media and PDF checks may return unknown or use lighter built-in checks.</div>
                 }
                 <div class="tool-row">
                     @foreach (var tool in ToolProbe.GetStatuses())

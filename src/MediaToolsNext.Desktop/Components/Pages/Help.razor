@@ -15,7 +15,7 @@
         </details>
         <details>
             <summary>Are source files changed?</summary>
-            <p>Log only mode only validates and records results. Write modes copy or move selected outcomes to a target folder; move mode removes originals only after the destination write succeeds. Originals are never modified during validation.</p>
+            <p>Log only mode validates and records results without target writes. Write modes copy or move selected outcomes to a target folder; move mode removes originals only after the destination write succeeds. Validation itself does not modify file contents.</p>
         </details>
     </section>
 
@@ -27,7 +27,7 @@
         </details>
         <details>
             <summary>What do validation levels mean?</summary>
-            <p>Quick checks file existence, non-zero size, and headers. Medium adds lightweight external probes when available. In-depth asks external tools to read more of the file for stronger corruption detection.</p>
+            <p>Quick checks file existence, non-zero size, and lightweight signatures. Medium adds available metadata probes. In-depth asks external tools to read more data where supported for stronger corruption detection.</p>
         </details>
         <details>
             <summary>What do hard limits count?</summary>
@@ -63,7 +63,7 @@
         </details>
         <details>
             <summary>What do statuses mean?</summary>
-            <p>Valid passed validation. Corrupt failed a validator check. Unknown means inconclusive, such as missing tools, encrypted or unsupported content, warning-only probe output, or headers that cannot prove validity. Error means the validator crashed, timed out, or hit an I/O failure. Skipped means a matched file reached the pipeline but had no validator; most disabled or unsupported families are counted earlier as filtered family.</p>
+            <p>Valid passed validation. Corrupt failed a validator check or a validator-specific timeout. Unknown means inconclusive, such as missing tools, encrypted or unsupported content, warning-only probe output, or headers that cannot prove validity. Error means the pipeline could not complete the row, such as an I/O failure or access-denied discovery entry. Skipped means a matched file reached the pipeline but had no validator; most disabled or unsupported families are counted earlier as filtered family.</p>
         </details>
         <details>
             <summary>How do selected result actions work?</summary>
@@ -71,11 +71,11 @@
         </details>
         <details>
             <summary>Can I preview files?</summary>
-            <p>Image result paths open the built-in preview. The preview can be pinned, folded, navigated with previous/next buttons or arrow keys, and opened externally. Very large images or non-image files may need the external Open action instead.</p>
+            <p>Image result paths open the built-in preview. The preview can be pinned, folded, navigated with previous/next buttons or arrow keys, and opened externally when an image row is selected. Very large images may need the external Open action instead.</p>
         </details>
         <details>
             <summary>What exports are available?</summary>
-            <p>Export writes the current result set as CSV or tab-separated TXT using the configured report sort. Status actions can export filtered CSV lists or copy visible full paths to the clipboard.</p>
+            <p>Export writes the current result set as CSV or tab-separated TXT using the configured report sort. Status actions export in the selected report format or copy visible full paths to the clipboard.</p>
         </details>
     </section>
 
@@ -87,7 +87,7 @@
         </details>
         <details>
             <summary>Which external tools are used?</summary>
-            <p>ffmpeg and ffprobe validate video and audio. ImageMagick (<code>magick</code>) strengthens image validation. <a href="/tools">Tools</a> shows available or missing status, version/detail text, and resolved path when found.</p>
+            <p>ffmpeg and ffprobe validate video and audio. ImageMagick (<code>magick</code>) strengthens image validation. qpdf validates PDF structure. <a href="/tools">Tools</a> shows available or missing status, version/detail text, and resolved path when found.</p>
         </details>
         <details>
             <summary>How do tool installs work?</summary>

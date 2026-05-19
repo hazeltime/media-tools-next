@@ -6,14 +6,14 @@
     <header class="page-header">
         <p class="eyebrow">Step 1</p>
         <h1>Setup</h1>
-        <p>Choose the source folder and what the app may write. Source files are read only.</p>
+        <p>Choose the source folder and what the app may write. Log-only validation reads source files; move mode removes originals after successful writes.</p>
     </header>
 
     <section class="panel">
         <div class="form-grid">
             <label>
                 Source folder
-                <small>Scanned recursively. Originals are not changed.</small>
+                <small>Scanned recursively. Validation reads files only; move mode can remove originals after a successful destination write.</small>
                 <div class="input-action">
                     <input @bind="State.SourcePath" />
                     <button @onclick="PickSource">Browse</button>

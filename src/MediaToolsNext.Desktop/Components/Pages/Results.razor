@@ -152,7 +152,7 @@
                 <h2>Corrupt files — actions</h2>
                 <div class="action-bar">
                     <button class="secondary" @onclick="OpenCorruptFolder">Open output folder</button>
-                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Corrupt)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Corrupt)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyCorruptPaths">Copy visible paths to clipboard</button>
                 </div>
                 <p class="muted" style="margin-top:0.5rem">Corrupt files failed at least one validator check. Inspect the Detail column for the specific failure reason.</p>
@@ -164,7 +164,7 @@
                 <h2>Valid files — actions</h2>
                 <div class="action-bar">
                     <button class="secondary" @onclick="OpenValidFolder">Open output folder</button>
-                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Valid)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Valid)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyValidPaths">Copy visible paths to clipboard</button>
                 </div>
             </section>
@@ -174,7 +174,7 @@
             <section class="panel context-actions">
                 <h2>Unknown files — actions</h2>
                 <div class="action-bar">
-                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Unknown)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Unknown)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyUnknownPaths">Copy visible paths to clipboard</button>
                 </div>
                 <p class="muted" style="margin-top:0.5rem">Unknown means validation was inconclusive, not proven corrupt: missing external tools, encrypted PDFs, warning-only tool results, unknown image headers, or a validator that could not make a definitive decision.</p>
@@ -185,10 +185,10 @@
             <section class="panel context-actions">
                 <h2>Error files — actions</h2>
                 <div class="action-bar">
-                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Error)">Export list (CSV)</button>
+                    <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Error)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyErrorPaths">Copy visible paths to clipboard</button>
                 </div>
-                <p class="muted" style="margin-top:0.5rem">Error means the validator itself threw an exception (I/O error, tool crash, timeout). The file may or may not be corrupt — retry with Force rescan enabled.</p>
+                <p class="muted" style="margin-top:0.5rem">Error means the pipeline could not complete validation for this row, such as an I/O failure or access-denied discovery entry. Tool timeouts may also appear as corrupt or unknown depending on the validator.</p>
             </section>
         }
         else if (ActiveTab == "skipped")
@@ -236,6 +236,7 @@
                         <strong>@(_previewRow?.Candidate.RelativePath ?? "Preview")</strong>
                         <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="PreviousImageAsync">Prev</button>
                         <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="NextImageAsync">Next</button>
+                        <button class="secondary compact" disabled="@(_previewRow is null)" @onclick="OpenPreviewExternal">Open</button>
                         <button class="secondary compact" @onclick="() => _previewCollapsed = !_previewCollapsed">@(_previewCollapsed ? "Expand" : "Fold")</button>
                         <button class="secondary compact" @onclick="() => _previewPinned = false">Unpin</button>
                     </div>
@@ -274,7 +275,7 @@
         }
         else
         {
-            <p class="muted">Preview is unavailable for this file size or type. Use Open to launch it externally.</p>
+            <p class="muted">Preview is unavailable for this file size or type. Use Open when an image row is selected to launch it externally.</p>
         }
     </div>;
 
