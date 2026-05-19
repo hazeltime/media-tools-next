@@ -50,9 +50,12 @@ public static class ScanProfiles
     public static IReadOnlyList<ScanProfile> All { get; } = [FastDryRun, StandardImages, DeepImages, AllMedia];
 
     /// <summary>
-    /// Resolves a profile by name. Falls back to <see cref="FastDryRun"/> when
-    /// <paramref name="name"/> is null or unknown — callers that need all-media
-    /// scanning must explicitly pass "all-media".
+    /// Resolves a profile by name. The shared resolver falls back to
+    /// <see cref="FastDryRun"/> when <paramref name="name"/> is null or unknown.
+    /// The CLI supplies <see cref="DeepImages"/> when its --profile option is
+    /// omitted, so this fallback mainly applies to direct callers and unknown
+    /// explicit names. Callers that need all-media scanning must explicitly pass
+    /// "all-media".
     /// </summary>
     public static ScanProfile Get(string? name) =>
         All.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))

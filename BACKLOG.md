@@ -1,6 +1,6 @@
 # Backlog
 
-Verified against `main` after `f16aa1c`.
+Verified against the current implementation on this branch.
 
 ## High Priority
 
@@ -24,38 +24,36 @@ Verified against `main` after `f16aa1c`.
    - `Results.razor` owns filtering, sorting, detail grouping, paging, selection, preview navigation, exports, and manual file actions.
    - Definition of done: pure helper/view-model covers status tab, search, detail group, sort modes, paging, selection, and preview navigation; tests live in `MediaToolsNext.Desktop.Tests`.
 
-5. Normalize configuration ownership and defaults.
-   - `ScanOptions.ExternalToolTimeoutSeconds` defaults to `20`, while CLI and Desktop pass `15`.
+5. Normalize database path ownership.
    - `ScanOptions.DatabasePath` is stored in options, but actual persistence is owned by injected `SqliteScanStore`.
-   - Definition of done: timeout defaults are aligned and tested; DB path ownership is either removed from `ScanOptions` or made authoritative through a store factory/pipeline construction path.
+   - Definition of done: DB path ownership is either removed from `ScanOptions` or made authoritative through a store factory/pipeline construction path.
 
-6. Expand persistence and history tests.
-   - Existing batch-save coverage covers mixed valid/error/unknown summary, but not repeated batches, timestamp ordering, corrupt status, or session limit ordering.
-   - Definition of done: tests cover `BatchSaveResultsAsync` repeated calls/order guarantees, all summary statuses, multiple sessions, descending session order, and `ListSessionsAsync(take)` cap.
+6. Expand repeated-batch persistence tests.
+   - Existing coverage includes all summary statuses and newest-first session limit ordering, but not repeated batch-save idempotence/order behavior.
+   - Definition of done: tests cover `BatchSaveResultsAsync` repeated calls and ordering guarantees.
 
-7. Improve Desktop packaging metadata and platform surface.
-   - Desktop project still uses `ApplicationTitle=MediaToolsNext.Desktop` and `ApplicationId=com.companyname.mediatoolsnext.desktop`.
-   - It also declares Android/iOS/MacCatalyst target frameworks even though repo docs and publish script focus on Windows desktop plus Linux CLI.
-   - Definition of done: product decision documented; app title/id updated; target frameworks match supported platforms or docs explicitly describe mobile targets as future/experimental.
-
-8. Add CLI health/preflight mode.
-   - No `--health` command exists.
-   - Definition of done: CLI can check source/target existence, target writeability, database path, external tool availability, and profile/options summary without scanning.
+7. Decide Desktop target-framework policy.
+   - Desktop project declares Android/iOS/MacCatalyst target frameworks even though repo docs and publish script focus on Windows desktop plus Linux CLI.
+   - Definition of done: target frameworks match supported platforms or docs explicitly describe mobile targets as future/experimental.
 
 ## Lower Priority
 
-9. Add slow/performance test harness.
+8. Add slow/performance test harness.
    - Useful for validating `HardwareTuner`, `ScannerPipeline` backpressure, SQLite batching, and concurrency choices.
    - Definition of done: `[Trait("Category", "Slow")]` or standalone harness creates synthetic trees and reports files/s and MB/s for standard scenarios.
 
-10. Make image preview size checks use current file metadata.
-    - `Results.razor` gates preview by `row.Candidate.SizeBytes`, which can be stale, then calls `File.ReadAllBytesAsync`.
-    - Definition of done: preview checks `FileInfo.Length` immediately before reading, handles file changes gracefully, and has tests for stale/missing/oversized image rows if extracted to a helper.
+9. Add image preview helper tests if preview logic is extracted.
+   - `Results.razor` now checks `FileInfo.Length` immediately before reading image bytes, but the logic is still embedded in the page.
+   - Definition of done: if preview logic moves to a helper/view-model, tests cover stale, missing, and oversized image rows.
 
 ## Rejected Or Stale AI Findings
 
-- Latest commit claims around `1d025d5` are stale; current checked baseline was `f16aa1c`.
+- Latest commit claims around `1d025d5` and earlier checked baselines are stale; this backlog is verified against the current feature branch implementation.
 - Hardware tuning being "just logged" is stale: CLI now uses recommended concurrency/probe seconds and `CopyBufferBytes`.
+- CLI health/preflight absence is stale: `--health` now checks source/target existence, target writeability, database folder availability, and external tool availability without scanning.
+- External tool timeout mismatch is stale: Core, CLI, and Desktop now use a 15-second default.
+- Desktop title/id and Windows branding metadata findings are stale: product-facing metadata now uses Media Tools Next and `com.hazeltime.mediatoolsnext`.
+- Preview stale-size guard is stale: image preview checks current `FileInfo.Length` before reading bytes.
 - `ScanWorkflowState` source-link test architecture is stale: it was moved into Core and the desktop tests reference Core.
 - Results empty `colspan` and copy-visible filter mismatch are stale: `colspan="7"` and `_visibleRows` copy behavior are already present.
 - Tool installer "no timeout / stdout before stderr" is stale: process execution now has a timeout and concurrent stdout/stderr reads. The remaining gap is UI cancellation/logging.

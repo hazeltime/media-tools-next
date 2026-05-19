@@ -52,10 +52,13 @@ dotnet test tests\MediaToolsNext.Desktop.Tests\MediaToolsNext.Desktop.Tests.cspr
 ## CLI
 
 ```powershell
+dotnet run --project src\MediaToolsNext.Cli -- --help
+dotnet run --project src\MediaToolsNext.Cli -- --version
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target>
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --preview
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --live
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --backup <backup> --live
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --profile all-media
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --concurrency <1-32>
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --probe-seconds <10-600>
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --tool-timeout-seconds <5-600>
@@ -64,11 +67,15 @@ dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --health
 ```
 
 Without `--live`, no files are copied.
+Use `--help`, `-h`, or `-?` to print usage and the built-in profile list. Use `--version` or `-v` to print the assembly informational version.
 If `--concurrency` is omitted, the CLI uses the hardware tuner recommendation. Explicit values are clamped to the 1-32 range.
-If `--probe-seconds` is omitted, the CLI uses the hardware tuner recommendation.
-If `--profile` is omitted, the CLI uses `deep-images`, which performs the in-depth image check. The external tool timeout defaults to 15 seconds unless overridden.
+If `--probe-seconds` is omitted, the CLI uses the hardware tuner recommendation. Explicit values are clamped to the 10-600 range.
+If `--profile` is omitted, the CLI uses `deep-images`, which performs the in-depth image check. Unknown profile names fall back to `quick-images` through the shared profile resolver.
+Available profiles are `quick-images`, `standard-images`, `deep-images`, and `all-media`.
+The external tool timeout defaults to 15 seconds unless overridden.
 Use `--flat`, `--move`, and `--group-category` to change write layout and operation in live modes.
-Use `--health` to check source, target, database folder, and external tools without scanning.
+Use `--health` to check source, target, target writeability, database folder, and external tools without scanning. The target check creates and deletes a temporary `.media-tools-next-write-test-*` file in the target folder.
+Limit guard flags are accepted by the CLI and printed in `--help`: `--max-searched-files`, `--max-matched-files`, `--max-searched-dirs`, `--max-matched-dirs`, `--min-runtime-seconds`, `--min-scanned-mb`, `--max-scanned-mb`, `--min-matched-mb`, and `--max-matched-mb`.
 
 ## Desktop
 
