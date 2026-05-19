@@ -1,50 +1,46 @@
 # Backlog
 
-Verified against the current implementation on this branch.
+All planned backlog items have been implemented and verified against the current `main` branch.
 
-## High Priority
+## Completed
 
-1. Harden destructive move semantics in `FileActionService`.
-   - Current move flow copies to target and then deletes the source.
-   - If delete fails with a retryable `IOException`, `ScannerPipeline.ApplyWithRetryAsync` can retry the whole action and create another suffixed target copy.
-   - Definition of done: copy/delete phases do not duplicate target files on delete failure; result preserves target path and delete failure detail; tests cover locked-source/delete-failure behavior.
+1. **Harden destructive move semantics in `FileActionService`.**
+   - `ScannerPipeline.ApplyWithRetryAsync` catches `MoveDeleteFailedException`, returns outcome with preserved target path and delete failure detail (no retry of the whole action).
+   - Test: `MovePermanentDeleteFailurePreservesPathsAndErrorDetail` in `ScannerPipelineFlowTests.cs`.
 
-2. Route Results-page manual copy/move through shared backend file-action logic.
-   - `Results.razor` still uses synchronous `File.Copy` / `File.Move`, local `GetSafePath`, and UI-specific path building.
-   - It does not get the same `FileActionService` path validation, `CreateNew` collision handling, buffer sizing, retry behavior, or error result shape as scan actions.
-   - Definition of done: manual selected-row actions use shared async service/helper, report copied/moved/skipped/failed counts, and tests cover duplicate flat names, traversal, missing sources, and move failure.
+2. **Route Results-page manual copy/move through shared backend file-action logic.**
+   - `Results.razor` injects `IFileActionService` and uses it for all manual file operations.
+   - `ResultsPresentationModel` handles filtering, sorting, paging, and selection.
+   - No direct `File.Copy`/`File.Move` calls remain in the page.
 
-3. Make Tools install/upgrade cancellable from the UI.
-   - `ToolInstallService` now has timeout-aware process execution and tests, but `Tools.razor` still passes `CancellationToken.None` and exposes no cancel action.
-   - Definition of done: Tools page owns a `CancellationTokenSource`, exposes Cancel while busy, surfaces timeout/cancel states clearly, and writes full command output to a log file when output is long.
+3. **Make Tools install/upgrade cancellable from the UI.**
+   - `Tools.razor` owns a `CancellationTokenSource` (`_installCts`), exposes `CancelOperation()`, displays command output logs, and surfaces timeout/cancel states.
 
-## Medium Priority
+4. **Extract Results filtering/sorting/paging/selection helpers.**
+   - `ResultsPresentationModel` extracted to `Core/Presentation/` with tests in `MediaToolsNext.Desktop.Tests/ResultsPresentationTests.cs`.
+   - `ImagePreviewHelper` extracted to `Core/Presentation/` with MIME type and size-limit tests.
 
-4. Extract Results filtering/sorting/paging/selection helpers.
-   - `Results.razor` owns filtering, sorting, detail grouping, paging, selection, preview navigation, exports, and manual file actions.
-   - Definition of done: pure helper/view-model covers status tab, search, detail group, sort modes, paging, selection, and preview navigation; tests live in `MediaToolsNext.Desktop.Tests`.
+5. **Normalize database path ownership.**
+   - `DatabasePath` removed from `ScanOptions` record and `CreateDefault`.
+   - DB path flows exclusively through DI wiring (`AddMediaToolsNext`) or `CliScanOptionsBuildResult.DatabasePath`.
+   - Commit: `093cd05`.
 
-5. Normalize database path ownership.
-   - `ScanOptions.DatabasePath` is stored in options, but actual persistence is owned by injected `SqliteScanStore`.
-   - Definition of done: DB path ownership is either removed from `ScanOptions` or made authoritative through a store factory/pipeline construction path.
+6. **Expand repeated-batch persistence tests.**
+   - `BatchSaveResultsConcurrentAndRepeatedWrites` covers sequential duplicates, parallel `SaveResultAsync`/`BatchSaveResultsAsync` concurrency.
+   - `ListResultsPreservesInsertionOrderForEqualTimestamps` covers ordering guarantees.
 
-6. Expand repeated-batch persistence tests.
-   - Existing coverage includes all summary statuses and newest-first session limit ordering, but not repeated batch-save idempotence/order behavior.
-   - Definition of done: tests cover `BatchSaveResultsAsync` repeated calls and ordering guarantees.
+7. **Decide Desktop target-framework policy.**
+   - Desktop project targets only `net10.0-windows10.0.19041.0` (single framework).
+   - All Android/iOS/MacCatalyst target entries removed.
 
-7. Decide Desktop target-framework policy.
-   - Desktop project declares Android/iOS/MacCatalyst target frameworks even though repo docs and publish script focus on Windows desktop plus Linux CLI.
-   - Definition of done: target frameworks match supported platforms or docs explicitly describe mobile targets as future/experimental.
+8. **Add slow/performance test harness.**
+   - `SlowPerformanceHarnessTests.cs` creates synthetic directory trees with real files and runs the full pipeline.
+   - Three tests tagged `[Trait("Category", "Slow")]`: small tree (500 files), medium tree (1000 files), concurrency backpressure (1 vs 8 workers).
+   - Excluded from default fast test suite via `--filter "Category!=Slow"`.
+   - Commit: `b0b7b32`.
 
-## Lower Priority
-
-8. Add slow/performance test harness.
-   - Useful for validating `HardwareTuner`, `ScannerPipeline` backpressure, SQLite batching, and concurrency choices.
-   - Definition of done: `[Trait("Category", "Slow")]` or standalone harness creates synthetic trees and reports files/s and MB/s for standard scenarios.
-
-9. Add image preview helper tests if preview logic is extracted.
-   - `Results.razor` now checks `FileInfo.Length` immediately before reading image bytes, but the logic is still embedded in the page.
-   - Definition of done: if preview logic moves to a helper/view-model, tests cover stale, missing, and oversized image rows.
+9. **Add image preview helper tests.**
+   - `ResultsPresentationTests.cs` covers `ImagePreviewHelper.ResolveMimeType` (all known extensions) and `ImagePreviewHelper.CanPreview` (10 MB boundary).
 
 ## Rejected Or Stale AI Findings
 
