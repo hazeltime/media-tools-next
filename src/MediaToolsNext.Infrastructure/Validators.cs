@@ -228,9 +228,7 @@ public sealed class DocumentValidator : IMediaValidator
         try
         {
             await using var stream = File.Open(candidate.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            // BUG FIX: explicit (int) cast prevents potential OverflowException if
-            // ProbeBytes were ever changed to exceed int.MaxValue; also silences
-            // compiler ambiguity between Math.Min(int,long) overloads.
+            // Keep the Math.Min overload explicit if ProbeBytes is changed later.
             var buf = new byte[(int)Math.Min((long)ProbeBytes, candidate.SizeBytes)];
             var read = await stream.ReadAsync(buf, cancellationToken);
             return read > 0
