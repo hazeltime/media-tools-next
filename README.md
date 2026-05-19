@@ -10,7 +10,7 @@ Consolidated .NET 10 media integrity scanner and sorter.
 - Can copy sorted results into `valid`, `corrupt`, `unknown`, and `error` folders.
 - Can mirror sorted output to a backup target.
 - Stores scan sessions and results in SQLite.
-- Provides both a .NET MAUI Blazor desktop app and a CLI entrypoint.
+- Provides a Windows .NET MAUI Blazor desktop app and cross-platform CLI entrypoint.
 
 ## External Tools
 
@@ -69,6 +69,8 @@ If `--profile` is omitted, the CLI uses `deep-images`, which performs the in-dep
 Use `--flat`, `--move`, and `--group-category` to change write layout and operation in live modes.
 
 ## Desktop
+
+The supported desktop build is Windows (`net10.0-windows10.0.19041.0`). The MAUI project still contains the template mobile and MacCatalyst target entries, but release publishing currently covers Windows desktop and CLI outputs only.
 
 The desktop app starts at `MainPage` and walks through the scan workflow in the app itself. By default it stores the SQLite database under `%LocalAppData%\media-tools-next\media-tools-next.db`.
 

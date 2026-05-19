@@ -29,10 +29,10 @@
         <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
         <!-- Display name -->
-        <ApplicationTitle>MediaToolsNext.Desktop</ApplicationTitle>
+        <ApplicationTitle>Media Tools Next</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.companyname.mediatoolsnext.desktop</ApplicationId>
+        <ApplicationId>com.hazeltime.mediatoolsnext</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
