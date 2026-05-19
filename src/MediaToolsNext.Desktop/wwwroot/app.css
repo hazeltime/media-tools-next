@@ -578,7 +578,16 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
    ══════════════════════════════════════════════════════════════════════════ */
 .preflight-item { border-radius: var(--radius-md); display: flex; gap: var(--gap-sm); padding: 9px 10px; }
 .preflight-item.ok    { background: var(--c-success-soft); color: var(--c-success); }
+.preflight-item.ok strong::before { content: "✓ "; }
 .preflight-item.error { background: var(--c-danger-soft); color: var(--c-danger); }
+.preflight-item.error strong::before { content: "✗ "; }
+.notice-visible {
+    animation: noticeFadeIn 200ms ease both;
+}
+@keyframes noticeFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Run page
@@ -669,9 +678,10 @@ small, .muted { color: var(--c-muted); font-weight: 500; font-size: 12px; }
     height: 100%;
     max-width: 100%;
     min-width: 0;
-    transform: scaleX(0);
+    transform: scaleX(var(--progress, 0));
     transform-origin: left center;
     width: 100%;
+    transition: transform 300ms ease;
     will-change: transform;
 }
 .progress-metric.active .progress-fill { animation: progress-stripes 900ms linear infinite; }
@@ -1105,6 +1115,20 @@ a, .btn-link { color: #006bb7; }
    ══════════════════════════════════════════════════════════════════════════ */
 .regex-invalid  { color: var(--c-danger) !important; font-weight: 700; }
 .empty-state    { color: var(--c-muted); font-style: italic; padding: 12px 0; }
+.run-empty-state {
+    align-items: center;
+    background: var(--c-surface-2);
+    border: 1px dashed var(--c-border-strong);
+    border-radius: var(--radius-lg);
+    display: grid;
+    gap: var(--gap-xs);
+    justify-items: center;
+    min-height: 100px;
+    padding: var(--gap-lg);
+    text-align: center;
+}
+.run-empty-state strong { color: var(--c-text); font-size: 15px; }
+.run-empty-state span   { color: var(--c-muted); font-size: 13px; max-width: 320px; }
 .confirm        { color: #7c2d12; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
