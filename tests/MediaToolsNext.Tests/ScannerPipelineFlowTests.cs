@@ -95,6 +95,43 @@ public class ScannerPipelineFlowTests
     }
 
     [Fact]
+    public async Task RuntimeLimitFlushesProcessedResultsBeforeReturningSummary()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            for (var i = 0; i < 40; i++)
+                File.WriteAllText(Path.Combine(root, $"file-{i:D2}.txt"), "hello");
+
+            var db = Path.Combine(root, "state.db");
+            var store = new SqliteScanStore(db);
+            var pipeline = new ScannerPipeline(
+                new FileDiscoverer(),
+                new ValidatorRegistry([new DelayedValidator(TimeSpan.FromMilliseconds(50))]),
+                new FileActionService(),
+                store,
+                new ScanControl());
+
+            var summary = await pipeline.RunAsync(
+                ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db) with
+                {
+                    MaxConcurrency = 1,
+                    MaxRuntimeSeconds = 1,
+                    LimitState = new ScanLimitState()
+                },
+                null,
+                CancellationToken.None);
+            var results = await store.ListResultsAsync(summary.SessionId, CancellationToken.None);
+
+            Assert.InRange(summary.Total, 1, 39);
+            Assert.Equal(summary.Total, results.Count);
+            Assert.Equal("Stopped after reaching the 1s time limit.", summary.CompletionReason);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task PipelineReturnsDiscoveryCompletionReason()
     {
         var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
@@ -275,6 +312,17 @@ public class ScannerPipelineFlowTests
         {
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
             return new ValidationOutcome(candidate, ValidationStatus.Valid, "slow", null, TimeSpan.Zero);
+        }
+    }
+
+    private sealed class DelayedValidator(TimeSpan delay) : IMediaValidator
+    {
+        public MediaCategory Category => MediaCategory.Document;
+
+        public async Task<ValidationOutcome> ValidateAsync(FileCandidate candidate, ScanOptions options, CancellationToken cancellationToken)
+        {
+            await Task.Delay(delay, cancellationToken);
+            return new ValidationOutcome(candidate, ValidationStatus.Valid, "delayed", null, TimeSpan.Zero);
         }
     }
 
