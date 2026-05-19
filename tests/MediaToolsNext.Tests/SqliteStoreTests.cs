@@ -49,6 +49,38 @@ public class SqliteStoreTests
     }
 
     [Fact]
+    public async Task BatchSaveResultsStoresAndSummarizesAllRows()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
+        Directory.CreateDirectory(root);
+        try
+        {
+            var db = Path.Combine(root, "state.db");
+            var store = new SqliteScanStore(db);
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), db);
+            await store.InitializeAsync(CancellationToken.None);
+            var session = await store.CreateSessionAsync(options, CancellationToken.None);
+            var records = new[]
+            {
+                CreateRecord(session, root, "valid.txt", ValidationStatus.Valid),
+                CreateRecord(session, root, "error.txt", ValidationStatus.Error),
+                CreateRecord(session, root, "unknown.txt", ValidationStatus.Unknown)
+            };
+
+            await store.BatchSaveResultsAsync(records, CancellationToken.None);
+
+            var listed = await store.ListResultsAsync(session, CancellationToken.None);
+            var summary = await store.GetSummaryAsync(session, CancellationToken.None);
+            Assert.Equal(3, listed.Count);
+            Assert.Equal(3, summary.Total);
+            Assert.Equal(1, summary.Valid);
+            Assert.Equal(1, summary.Errors);
+            Assert.Equal(1, summary.Unknown);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task ListsRecentSessions()
     {
         var root = Path.Combine(Path.GetTempPath(), "media-tools-next-" + Guid.NewGuid());
@@ -67,5 +99,11 @@ public class SqliteStoreTests
             Assert.Equal(root, sessions.Single(x => x.SessionId == session).SourcePath);
         }
         finally { Directory.Delete(root, true); }
+    }
+
+    private static ScanResultRecord CreateRecord(Guid session, string root, string fileName, ValidationStatus status)
+    {
+        var candidate = new FileCandidate(Path.Combine(root, fileName), fileName, ".txt", MediaCategory.Document, 1, DateTimeOffset.UtcNow);
+        return new ScanResultRecord(session, candidate, status, "test", null, "dry-run", null, null, DateTimeOffset.UtcNow);
     }
 }

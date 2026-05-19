@@ -6,6 +6,7 @@
     <Project Path="src/MediaToolsNext.Infrastructure/MediaToolsNext.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MediaToolsNext.Desktop.Tests/MediaToolsNext.Desktop.Tests.csproj" />
     <Project Path="tests/MediaToolsNext.Tests/MediaToolsNext.Tests.csproj" />
   </Folder>
 </Solution>
