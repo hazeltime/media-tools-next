@@ -6,7 +6,7 @@
 <div class="configure-page">
 
     <!-- ═══ SECTION: Folders & Mode ════════════════════════════════════════════════════ -->
-    <section class="panel cfg-section cfg-step-1">
+    <section id="cfg-setup" class="panel cfg-section cfg-step-1 cfg-section-anchor">
         <div class="cfg-section-head">
             <span class="cfg-step">1</span>
             <div>
@@ -39,8 +39,8 @@
                 </label>
                 @if (State.Mode != ScanActionMode.DryRun)
                 {
-                    <label>
-                    Target folder
+                    <label class="cfg-conditional">
+                        Target folder
                         <small>Selected files land here using the output options below.</small>
                         <div class="input-action">
                             <input @bind="State.TargetRoot" />
@@ -50,8 +50,8 @@
                 }
                 @if (State.Mode == ScanActionMode.CopySortedAndBackup)
                 {
-                    <label>
-                    Backup folder
+                    <label class="cfg-conditional">
+                        Backup folder
                         <small>Mirror of the selected target writes.</small>
                         <div class="input-action">
                             <input @bind="State.BackupRoot" />
@@ -91,7 +91,7 @@
     <div class="cfg-divider"></div>
 
     <!-- ═══ SECTION: Media & Filters ════════════════════════════════════════════════ -->
-    <section class="panel cfg-section cfg-step-2">
+    <section id="cfg-media" class="panel cfg-section cfg-step-2 cfg-section-anchor">
         <div class="cfg-section-head">
             <span class="cfg-step">2</span>
             <div>

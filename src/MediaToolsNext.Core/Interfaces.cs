@@ -96,6 +96,11 @@ public interface IScanStore
     /// Computes and returns a summary of the outcomes for a given scan session.
     /// </summary>
     Task<ScanSummary> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken);
+    
+    /// <summary>
+    /// Deletes a scan session and all its associated results.
+    /// </summary>
+    Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken);
 }
 
 /// <summary>

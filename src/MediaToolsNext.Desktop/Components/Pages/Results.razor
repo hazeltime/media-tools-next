@@ -23,7 +23,7 @@
         <h2>Scan status</h2>
         @if (State.LastRunStartedLocal is null)
         {
-            <p class="muted empty-state">No scan has been run yet. Go to Run to start one, or load a saved session from Saved scans.</p>
+            <p class="muted empty-state">No scan has been run yet. <a href="/run">Go to Run</a> to start one, or load a saved session from Saved scans.</p>
         }
         else
         {

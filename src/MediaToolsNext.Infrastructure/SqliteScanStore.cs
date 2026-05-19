@@ -130,7 +130,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
             await ConfigureConnectionAsync(connection, cancellationToken);
             await using var tx = await connection.BeginTransactionAsync(cancellationToken);
             foreach (var result in results)
-                await InsertResultAsync(connection, result, cancellationToken, tx as SqliteTransaction);
+                await InsertResultAsync(connection, result, cancellationToken, tx);
             await tx.CommitAsync(cancellationToken);
         }
         finally
@@ -143,7 +143,7 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
         SqliteConnection connection,
         ScanResultRecord result,
         CancellationToken cancellationToken,
-        SqliteTransaction? tx = null)
+        System.Data.Common.DbTransaction? tx = null)
     {
         var command = connection.CreateCommand();
         if (tx is not null) command.Transaction = (SqliteTransaction)tx;
@@ -242,6 +242,40 @@ public sealed class SqliteScanStore(string databasePath) : IScanStore
             Get(ValidationStatus.Unknown),
             Get(ValidationStatus.Error),
             Get(ValidationStatus.Skipped));
+    }
+
+    public async Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = new SqliteConnection(ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            await ConfigureConnectionAsync(connection, cancellationToken);
+            await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+            
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.Transaction = (SqliteTransaction)tx;
+                cmd.CommandText = "DELETE FROM results WHERE session_id = $session";
+                cmd.Parameters.AddWithValue("$session", sessionId.ToString());
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.Transaction = (SqliteTransaction)tx;
+                cmd.CommandText = "DELETE FROM sessions WHERE id = $session";
+                cmd.Parameters.AddWithValue("$session", sessionId.ToString());
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            
+            await tx.CommitAsync(cancellationToken);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     private static ScanResultRecord ReadResult(SqliteDataReader reader)

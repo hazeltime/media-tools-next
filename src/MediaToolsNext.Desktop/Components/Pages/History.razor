@@ -9,32 +9,78 @@
         <h1>Saved scans</h1>
         <p>Load prior sessions from the local SQLite database.</p>
     </header>
+
+    @if (!string.IsNullOrWhiteSpace(State.Message)) { <div class="notice">@State.Message</div> }
+
     <section class="panel">
         <div class="panel-title-row">
             <div>
-                <h2>Recent sessions</h2>
+                <h2>Recent sessions <span class="session-count-badge">@State.Sessions.Count</span></h2>
                 <p class="muted">Reload saved scan summaries and open their results.</p>
             </div>
-            <button @onclick="Load">Reload recent</button>
+            <div class="panel-actions">
+                <button class="secondary compact" @onclick="Load" disabled="@_isLoading" aria-label="Reload recent sessions">
+                    @(_isLoading ? "Loading..." : "Reload recent")
+                </button>
+            </div>
         </div>
-        @if (State.Sessions.Any())
+
+        @if (_isLoading)
         {
-            <div class="session-list">
-                @foreach (var session in State.Sessions)
+            <div class="loading-indicator" role="status" aria-live="polite">
+                <div class="loading-spinner"></div>
+                <span>Loading sessions...</span>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_searchFilter))
+        {
+            <div class="search-results-info">
+                <span>Showing @(_filteredSessions.Count) of @State.Sessions.Count sessions</span>
+                <button class="compact secondary" @onclick="ClearSearch" aria-label="Clear search filter">Clear filter</button>
+            </div>
+        }
+
+        @if (!_isLoading && State.Sessions.Any())
+        {
+            <div class="search-bar">
+                <input type="text" @bind="_searchFilter" @bind:event="oninput" placeholder="Filter by source path..." aria-label="Filter sessions by source path" />
+            </div>
+
+            <div class="session-list" role="list" aria-label="Saved scan sessions">
+                @foreach (var session in _filteredSessions)
                 {
-                    <button class="session-row @ModeClass(session.ActionMode.ToString())" @onclick="() => Open(session.SessionId)">
-                        <span class="session-mode">@FormatMode(session.ActionMode.ToString())</span>
-                        <strong>@session.StartedUtc.LocalDateTime.ToString("g")</strong>
-                        <span>@session.SourcePath</span>
-                    </button>
+                    <div class="session-row @ModeClass(session.ActionMode.ToString())" role="listitem" tabindex="0" @onclick="() => Open(session.SessionId)" @onkeydown="@(e => HandleKeyDown(e, session.SessionId))" aria-label="@($"{FormatMode(session.ActionMode.ToString())} scan from {session.StartedUtc.LocalDateTime.ToString("g")} at {session.SourcePath}")">
+                        <div class="session-row-content">
+                            <div class="session-header">
+                                <span class="session-mode-icon">@ModeIcon(session.ActionMode.ToString())</span>
+                                <span class="session-mode">@FormatMode(session.ActionMode.ToString())</span>
+                                <span class="session-date">@session.StartedUtc.LocalDateTime.ToString("g")</span>
+                                @if (_sessionOutcomes.TryGetValue(session.SessionId, out var outcome))
+                                {
+                                    <span class="session-outcome-badge @outcome.CssClass">@outcome.Label</span>
+                                }
+                            </div>
+                            <span class="session-path" title="@session.SourcePath">@TruncatePath(session.SourcePath)</span>
+                        </div>
+                        <button class="session-delete" @onclick="@(e => { e.StopPropagation(); DeleteSession(session.SessionId); })" aria-label="Delete session from @session.StartedUtc.LocalDateTime.ToString("g")" title="Delete this session">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                    </div>
                 }
             </div>
         }
-        else
+        else if (!_isLoading)
         {
             <div class="empty-state history-empty">
+                <div class="empty-state-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
                 <strong>@(_loaded ? "No saved sessions found." : "Saved scans will appear here.")</strong>
                 <span>@(_loaded ? "Run a scan to create a restorable session." : "Reload recent to query the local session database.")</span>
+                @if (_loaded)
+                {
+                    <button class="btn-primary" @onclick="() => Nav.NavigateTo("/run")" aria-label="Go to Run page to start a scan">Run a scan</button>
+                }
             </div>
         }
     </section>
@@ -42,6 +88,10 @@
 
 @code {
     private bool _loaded = false;
+    private bool _isLoading = false;
+    private string _searchFilter = string.Empty;
+    private List<ScanSessionRecord> _filteredSessions = new();
+    private Dictionary<Guid, SessionOutcome> _sessionOutcomes = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -50,10 +100,48 @@
 
     private async Task Load()
     {
-        await Store.InitializeAsync(CancellationToken.None);
-        State.Sessions.Clear();
-        State.Sessions.AddRange(await Store.ListSessionsAsync(30, CancellationToken.None));
-        _loaded = true;
+        _isLoading = true;
+        _loaded = false;
+        State.Message = string.Empty;
+        State.NotifyChanged();
+
+        try
+        {
+            await Store.InitializeAsync(CancellationToken.None);
+            State.Sessions.Clear();
+            State.Sessions.AddRange(await Store.ListSessionsAsync(30, CancellationToken.None));
+            _filteredSessions = State.Sessions.ToList();
+            await LoadSessionOutcomes();
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            State.Message = $"Failed to load sessions: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            State.NotifyChanged();
+        }
+    }
+
+    private async Task LoadSessionOutcomes()
+    {
+        _sessionOutcomes.Clear();
+        foreach (var session in State.Sessions.Take(10))
+        {
+            try
+            {
+                var summary = await Store.GetSummaryAsync(session.SessionId, CancellationToken.None);
+                if (summary != null)
+                {
+                    _sessionOutcomes[session.SessionId] = SessionOutcome.FromSummary(summary);
+                }
+            }
+            catch
+            {
+            }
+        }
     }
 
     private async Task Open(Guid id)
@@ -66,6 +154,38 @@
         var summary = await Store.GetSummaryAsync(id, CancellationToken.None);
         State.LoadSession(session, results, summary);
         Nav.NavigateTo("/results");
+    }
+
+    private async Task DeleteSession(Guid id)
+    {
+        try
+        {
+            await Store.DeleteSessionAsync(id, CancellationToken.None);
+            State.Sessions.RemoveAll(x => x.SessionId == id);
+            _filteredSessions.RemoveAll(x => x.SessionId == id);
+            _sessionOutcomes.Remove(id);
+            State.Message = "Session deleted.";
+            State.NotifyChanged();
+        }
+        catch (Exception ex)
+        {
+            State.Message = $"Failed to delete session: {ex.Message}";
+            State.NotifyChanged();
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e, Guid id)
+    {
+        if (e.Key == "Enter" || e.Key == " ")
+        {
+            _ = Open(id);
+        }
+    }
+
+    private void ClearSearch()
+    {
+        _searchFilter = string.Empty;
+        _filteredSessions = State.Sessions.ToList();
     }
 
     private static string FormatMode(string? mode) => mode switch
@@ -83,4 +203,61 @@
         "CopySortedAndBackup"  => "mode-backup",
         _                      => "mode-unknown"
     };
+
+    private static string ModeIcon(string? mode) => mode switch
+    {
+        "DryRun"               => "📋",
+        "CopySorted"           => "📦",
+        "CopySortedAndBackup"  => "💾",
+        _                      => "❓"
+    };
+
+    private static string TruncatePath(string path, int maxLength = 60)
+    {
+        if (string.IsNullOrEmpty(path) || path.Length <= maxLength)
+            return path;
+
+        var parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (parts.Length <= 2)
+            return path[..maxLength] + "...";
+
+        var fileName = parts[^1];
+        var parent = parts[^2];
+        return $"...{Path.DirectorySeparatorChar}{parent}{Path.DirectorySeparatorChar}{fileName}";
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(_searchFilter))
+        {
+            _filteredSessions = State.Sessions.ToList();
+        }
+        else
+        {
+            var filter = _searchFilter.ToLowerInvariant();
+            _filteredSessions = State.Sessions.Where(s =>
+                s.SourcePath?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true).ToList();
+        }
+    }
+
+    private record SessionOutcome(string Label, string CssClass)
+    {
+        public static SessionOutcome FromSummary(ScanSummary summary)
+        {
+            if (summary.TotalFiles == 0)
+                return new("Empty", "outcome-empty");
+
+            var corrupt = summary.StatusCounts.GetValueOrDefault(ValidationStatus.Corrupt, 0);
+            var errors = summary.StatusCounts.GetValueOrDefault(ValidationStatus.Error, 0);
+            var unknown = summary.StatusCounts.GetValueOrDefault(ValidationStatus.Unknown, 0);
+
+            if (corrupt > 0 || errors > 0)
+                return new($"⚠ {corrupt + errors} issues", "outcome-warning");
+
+            if (unknown > 0)
+                return new($"? {unknown} unknown", "outcome-unknown");
+
+            return new("✓ All valid", "outcome-valid");
+        }
+    }
 }
