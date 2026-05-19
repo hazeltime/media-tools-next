@@ -566,7 +566,8 @@
         _previewDataUri = null;
         try
         {
-            if (row.Candidate.SizeBytes <= 10 * 1024 * 1024)
+            var currentSizeBytes = new FileInfo(row.Candidate.FullPath).Length;
+            if (currentSizeBytes <= 10 * 1024 * 1024)
             {
                 var bytes = await File.ReadAllBytesAsync(row.Candidate.FullPath);
                 _previewDataUri = $"data:{ImageMime(row.Candidate.Extension)};base64,{Convert.ToBase64String(bytes)}";
