@@ -1,5 +1,8 @@
 namespace MediaToolsNext.Core;
 
+/// <summary>
+/// Represents the configuration options for a media scanning session.
+/// </summary>
 public sealed record ScanOptions(
     string SourcePath,
     string TargetRoot,
@@ -42,6 +45,9 @@ public sealed record ScanOptions(
     IReadOnlySet<string>? EnabledExtensions = null,
     int CopyBufferBytes = 1024 * 1024)
 {
+    /// <summary>
+    /// Creates a default set of scan options with reasonable defaults.
+    /// </summary>
     public static ScanOptions CreateDefault(string sourcePath, string targetRoot, string databasePath = "") =>
         new(
             sourcePath,
@@ -57,15 +63,27 @@ public sealed record ScanOptions(
             DatabasePath: databasePath);
 }
 
+/// <summary>
+/// Tracks reasons for stopping a scan early when limits are reached.
+/// </summary>
 public sealed class ScanLimitState
 {
+    /// <summary>
+    /// Gets the reason the scan was stopped, if any.
+    /// </summary>
     public string? StopReason { get; private set; }
 
+    /// <summary>
+    /// Unconditionally sets the stop reason.
+    /// </summary>
     public void Stop(string reason)
     {
         StopReason ??= reason;
     }
 
+    /// <summary>
+    /// Sets the stop reason, overriding natural exhaustion if work has started.
+    /// </summary>
     public void StopAfterWorkStarted(string reason)
     {
         if (StopReason is null or "Source exhausted.")

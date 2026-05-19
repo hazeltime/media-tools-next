@@ -3,6 +3,9 @@ using MediaToolsNext.Core;
 
 namespace MediaToolsNext.Infrastructure;
 
+/// <summary>
+/// Implements the main scanning pipeline, coordinating discovery, validation, and file actions concurrently.
+/// </summary>
 public sealed class ScannerPipeline(
     IFileDiscoverer discoverer,
     IValidatorRegistry validators,
@@ -13,6 +16,9 @@ public sealed class ScannerPipeline(
     private static bool IsAccessDeniedStub(FileCandidate c) =>
         c.SizeBytes == 0 && c.LastWriteTimeUtc == DateTimeOffset.MinValue;
 
+    /// <summary>
+    /// Executes the scanning pipeline, discovering files, validating them, and applying configured file actions.
+    /// </summary>
     public async Task<ScanSummary> RunAsync(
         ScanOptions options,
         IProgress<ScanResultRecord>? progress,

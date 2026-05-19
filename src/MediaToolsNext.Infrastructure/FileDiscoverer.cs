@@ -3,6 +3,9 @@ using System.Text.RegularExpressions;
 
 namespace MediaToolsNext.Infrastructure;
 
+/// <summary>
+/// Discovers media files in a source directory, evaluating them against inclusion, exclusion, and limit criteria.
+/// </summary>
 public sealed class FileDiscoverer : IFileDiscoverer
 {
     private static readonly HashSet<string> ExcludedDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
@@ -17,6 +20,10 @@ public sealed class FileDiscoverer : IFileDiscoverer
     private static readonly ScanDiscoveryEvent EvFilteredPattern   = new(DiscoveryEventType.FilteredOutPattern);
     private static readonly ScanDiscoveryEvent EvFilteredFamily    = new(DiscoveryEventType.FilteredOutFamily);
 
+    /// <summary>
+    /// Asynchronously enumerates file candidates matching the criteria in the provided options.
+    /// Safely handles access restrictions and deep paths.
+    /// </summary>
     public async IAsyncEnumerable<FileCandidate> DiscoverAsync(
         ScanOptions options,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
