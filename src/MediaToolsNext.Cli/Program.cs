@@ -19,7 +19,22 @@ var cancellationToken = cts.Token;
 // -----------------------------------------------------------------------
 if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
 {
-    Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [--backup <path>] [--live] [--move] [--flat] [--group-category] [--db <path>] [--concurrency <n>] [--probe-seconds <n>] [--tool-timeout-seconds <n>] [--profile <name>] [--preview] [--health]");
+    Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [options]");
+    Console.WriteLine();
+    Console.WriteLine("Options:");
+    Console.WriteLine("  --preview                         Discover matches without scanning or writing");
+    Console.WriteLine("  --health                          Check folders, database path, and tools without scanning");
+    Console.WriteLine("  --live                            Copy or move files instead of dry-run");
+    Console.WriteLine("  --move                            Move files in live mode instead of copying");
+    Console.WriteLine("  --backup <path>                   Mirror sorted output to a backup target");
+    Console.WriteLine("  --flat                            Write files into flat output folders with suffix collision handling");
+    Console.WriteLine("  --group-category                  Group output by media category instead of validation status");
+    Console.WriteLine("  --db <path>                       SQLite database path");
+    Console.WriteLine("  --export <path>                   Export scan results to CSV after a run");
+    Console.WriteLine("  --profile <name>                  Scan profile name");
+    Console.WriteLine("  --concurrency <1-32>              Override hardware-tuned concurrency");
+    Console.WriteLine("  --probe-seconds <10-600>          Override hardware-tuned media probe duration");
+    Console.WriteLine("  --tool-timeout-seconds <5-600>    External tool timeout");
     Console.WriteLine();
     Console.WriteLine("Profiles:");
     foreach (var p in ScanProfiles.All)
