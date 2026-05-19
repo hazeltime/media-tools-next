@@ -1,5 +1,7 @@
 @page "/results"
 @page "/results/{Tab}"
+@using MediaToolsNext.Core.Presentation
+@using MediaToolsNext.Core
 @inject ScanWorkflowState State
 @inject FolderPickerService Picker
 @inject IReportExporter CsvExporter
@@ -27,10 +29,10 @@
         {
             <div class="info-grid">
                 <div><strong>@State.LastRunType</strong><span>Type</span></div>
-                <div><strong>@FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
-                <div><strong>@FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
+                <div><strong>@ResultsPresentationModel.FormatTime(State.LastRunStartedLocal)</strong><span>Started</span></div>
+                <div><strong>@ResultsPresentationModel.FormatTime(State.LastRunEndedLocal)</strong><span>Ended</span></div>
             </div>
-            <p class="muted" style="margin-top:8px">@State.LastRunSettings</p>
+            <p class="muted mt-2">@State.LastRunSettings</p>
             <p class="muted">Completion: @State.LastCompletionReason</p>
         }
     </section>
@@ -40,29 +42,29 @@
         <!-- Input funnel -->
         <div class="summary-tile-group">
             <span class="summary-tile-group-label">Input</span>
-            <button class="summary-tile @(ActiveTab == "searched" ? "active" : "") searched"
+            <button class="summary-tile @(_model?.ActiveTab == "searched" ? "active" : "") searched"
                     @onclick='() => SetTab("searched")'>
                 <strong>@State.TotalSearched.ToString("N0")</strong><span>Searched</span>
             </button>
-            <button class="summary-tile @(ActiveTab == "filtered-size" ? "active" : "") filtered"
+            <button class="summary-tile @(_model?.ActiveTab == "filtered-size" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-size")'>
                 <strong>@State.FilteredOutSize.ToString("N0")</strong><span>Filtered · size</span>
-                <small>@FormatPercent(State.FilteredOutSize, State.TotalSearched)</small>
+                <small>@ResultsPresentationModel.FormatPercent(State.FilteredOutSize, State.TotalSearched)</small>
             </button>
-            <button class="summary-tile @(ActiveTab == "filtered-pattern" ? "active" : "") filtered"
+            <button class="summary-tile @(_model?.ActiveTab == "filtered-pattern" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-pattern")'>
                 <strong>@State.FilteredOutPattern.ToString("N0")</strong><span>Filtered · pattern</span>
-                <small>@FormatPercent(State.FilteredOutPattern, State.TotalSearched)</small>
+                <small>@ResultsPresentationModel.FormatPercent(State.FilteredOutPattern, State.TotalSearched)</small>
             </button>
-            <button class="summary-tile @(ActiveTab == "filtered-family" ? "active" : "") filtered"
+            <button class="summary-tile @(_model?.ActiveTab == "filtered-family" ? "active" : "") filtered"
                     @onclick='() => SetTab("filtered-family")'>
                 <strong>@State.FilteredOutFamily.ToString("N0")</strong><span>Filtered · family</span>
-                <small>@FormatPercent(State.FilteredOutFamily, State.TotalSearched)</small>
+                <small>@ResultsPresentationModel.FormatPercent(State.FilteredOutFamily, State.TotalSearched)</small>
             </button>
-            <button class="summary-tile @(ActiveTab == "all" ? "active" : "") total"
+            <button class="summary-tile @(_model?.ActiveTab == "all" ? "active" : "") total"
                     @onclick='() => SetTab("all")'>
                 <strong>@State.Results.Count.ToString("N0")</strong><span>Matched</span>
-                <small>@FormatPercent(State.Results.Count, State.TotalSearched)</small>
+                <small>@ResultsPresentationModel.FormatPercent(State.Results.Count, State.TotalSearched)</small>
             </button>
         </div>
         <!-- Outcomes -->
@@ -71,18 +73,18 @@
             @foreach (var st in Enum.GetValues<ValidationStatus>())
             {
                 var tabKey = st.ToString().ToLowerInvariant();
-                <button class="summary-tile @(ActiveTab == tabKey ? "active" : "") @tabKey"
+                <button class="summary-tile @(_model?.ActiveTab == tabKey ? "active" : "") @tabKey"
                         @onclick="() => SetTab(tabKey)">
                     <strong>@State.GetStatusCount(st).ToString("N0")</strong>
                     <span>@st</span>
-                    <small>@FormatPercent(State.GetStatusCount(st), State.Results.Count)</small>
+                    <small>@ResultsPresentationModel.FormatPercent(State.GetStatusCount(st), State.Results.Count)</small>
                 </button>
             }
         </div>
     </section>
 
     <!-- Tab content -->
-    @if (ActiveTab is "searched" or "filtered-size" or "filtered-pattern" or "filtered-family")
+    @if (_model?.ActiveTab is "searched" or "filtered-size" or "filtered-pattern" or "filtered-family")
     {
         <section class="panel">
             <h2>@TabTitle</h2>
@@ -92,12 +94,12 @@
             </div>
         </section>
     }
-    else
+    else if (_model is not null)
     {
         <!-- Toolbar -->
         <section class="result-toolbar panel">
             <label>Search path or detail
-                <input @bind="_searchText" @bind:event="oninput" @bind:after="RebuildCache" placeholder="filename, folder, validator detail…" />
+                <input @bind="_model.SearchText" @bind:event="oninput" @bind:after="RebuildCache" placeholder="filename, folder, validator detail…" />
             </label>
             <label>Sort
                 <select @bind="State.ReportSort" @bind:after="RebuildCache">
@@ -111,16 +113,16 @@
                 </select>
             </label>
             <label>Error/detail group
-                <select @bind="_detailGroup" @bind:after="RebuildCache">
+                <select @bind="_model.DetailGroup" @bind:after="RebuildCache">
                     <option value="">All details</option>
-                    @foreach (var detail in DetailGroups)
+                    @foreach (var detail in _model.GetDetailGroups())
                     {
                         <option value="@detail">@detail</option>
                     }
                 </select>
             </label>
             <label>Rows
-                <select @bind="_pageSize" @bind:after="ResetPage">
+                <select @bind="_model.PageSize" @bind:after="ResetPage">
                     <option value="25">25/page</option>
                     <option value="50">50/page</option>
                     <option value="100">100/page</option>
@@ -136,17 +138,17 @@
         <!-- Context actions per tab -->
         <section class="panel results-actions">
             <div class="action-bar">
-                <button class="secondary" disabled="@(!_pagedRows.Any())" @onclick="SelectPage">Select page</button>
-                <button class="secondary" disabled="@(!_visibleRows.Any())" @onclick="SelectFiltered">Select filtered</button>
-                <button class="secondary" disabled="@(_selectedKeys.Count == 0)" @onclick="ClearSelection">Clear selection</button>
-                <button class="@(State.ActionOperation == FileActionOperation.Move ? "danger" : "")" disabled="@(_selectedKeys.Count == 0)" @onclick="WriteSelectedWithConfigAsync">
+                <button class="secondary" disabled="@(!_model.PagedRows.Any())" @onclick="SelectPage">Select page</button>
+                <button class="secondary" disabled="@(!_model.VisibleRows.Any())" @onclick="SelectFiltered">Select filtered</button>
+                <button class="secondary" disabled="@(_model.SelectedKeys.Count == 0)" @onclick="ClearSelection">Clear selection</button>
+                <button class="@(State.ActionOperation == FileActionOperation.Move ? "danger" : "")" disabled="@(_model.SelectedKeys.Count == 0)" @onclick="WriteSelectedWithConfigAsync">
                     @(State.ActionOperation == FileActionOperation.Move ? "Move" : "Copy") selected
                 </button>
             </div>
-            <p class="muted">@_selectedKeys.Count.ToString("N0") selected. Batch writes use the filtered source paths and keep current result rows unchanged.</p>
+            <p class="muted">@_model.SelectedKeys.Count.ToString("N0") selected. Batch writes use the filtered source paths and keep current result rows unchanged.</p>
         </section>
 
-        @if (ActiveTab == "corrupt")
+        @if (_model.ActiveTab == "corrupt")
         {
             <section class="panel context-actions">
                 <h2>Corrupt files — actions</h2>
@@ -155,10 +157,10 @@
                     <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Corrupt)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyCorruptPaths">Copy visible paths to clipboard</button>
                 </div>
-                <p class="muted" style="margin-top:0.5rem">Corrupt files failed at least one validator check. Inspect the Detail column for the specific failure reason.</p>
+                <p class="muted mt-2">Corrupt files failed at least one validator check. Inspect the Detail column for the specific failure reason.</p>
             </section>
         }
-        else if (ActiveTab == "valid")
+        else if (_model.ActiveTab == "valid")
         {
             <section class="panel context-actions">
                 <h2>Valid files — actions</h2>
@@ -169,7 +171,7 @@
                 </div>
             </section>
         }
-        else if (ActiveTab == "unknown")
+        else if (_model.ActiveTab == "unknown")
         {
             <section class="panel context-actions">
                 <h2>Unknown files — actions</h2>
@@ -177,10 +179,10 @@
                     <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Unknown)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyUnknownPaths">Copy visible paths to clipboard</button>
                 </div>
-                <p class="muted" style="margin-top:0.5rem">Unknown means validation was inconclusive, not proven corrupt: missing external tools, encrypted PDFs, warning-only tool results, unknown image headers, or a validator that could not make a definitive decision.</p>
+                <p class="muted mt-2">Unknown means validation was inconclusive, not proven corrupt: missing external tools, encrypted PDFs, warning-only tool results, unknown image headers, or a validator that could not make a definitive decision.</p>
             </section>
         }
-        else if (ActiveTab == "error")
+        else if (_model.ActiveTab == "error")
         {
             <section class="panel context-actions">
                 <h2>Error files — actions</h2>
@@ -188,10 +190,10 @@
                     <button class="secondary" @onclick="() => ExportFilteredAsync(ValidationStatus.Error)">Export list (@State.ReportFormat.ToUpperInvariant())</button>
                     <button class="secondary" @onclick="CopyErrorPaths">Copy visible paths to clipboard</button>
                 </div>
-                <p class="muted" style="margin-top:0.5rem">Error means the pipeline could not complete validation for this row, such as an I/O failure or access-denied discovery entry. Tool timeouts may also appear as corrupt or unknown depending on the validator.</p>
+                <p class="muted mt-2">Error means the pipeline could not complete validation for this row, such as an I/O failure or access-denied discovery entry. Tool timeouts may also appear as corrupt or unknown depending on the validator.</p>
             </section>
         }
-        else if (ActiveTab == "skipped")
+        else if (_model.ActiveTab == "skipped")
         {
             <section class="panel context-actions">
                 <h2>Skipped files</h2>
@@ -204,14 +206,14 @@
                 <!-- Results table -->
                 <section class="panel results-panel">
                     <div class="result-count">
-                        <strong>@_filteredCount.ToString("N0")</strong>
+                        <strong>@_model.FilteredCount.ToString("N0")</strong>
                         <span>
-                            page @(_page + 1) of @TotalPages, showing @_pagedRows.Count.ToString("N0") rows.
+                            page @(_model.Page + 1) of @_model.TotalPages, showing @_model.PagedRows.Count.ToString("N0") rows.
                         </span>
                     </div>
-                    @if (State.GroupReportByStatus && _visibleRows.Count > 0)
+                    @if (State.GroupReportByStatus && _model.VisibleRows.Count > 0)
                     {
-                        @foreach (var group in _pagedRows.GroupBy(r => r.Status))
+                        @foreach (var group in _model.PagedRows.GroupBy(r => r.Status))
                         {
                             <h3 class="result-group-heading">@group.Key <span>@group.Count().ToString("N0")</span></h3>
                             @ResultTable(group)
@@ -219,12 +221,12 @@
                     }
                     else
                     {
-                        @ResultTable(_pagedRows)
+                        @ResultTable(_model.PagedRows)
                     }
                     <div class="pager">
-                        <button class="secondary compact" disabled="@(_page == 0)" @onclick="PreviousPage">Prev</button>
-                        <span>@((_pageStart + 1).ToString("N0"))-@Math.Min(_pageStart + _pageSize, _filteredCount).ToString("N0") of @_filteredCount.ToString("N0")</span>
-                        <button class="secondary compact" disabled="@(_page >= TotalPages - 1)" @onclick="NextPage">Next</button>
+                        <button class="secondary compact" disabled="@(_model.Page == 0)" @onclick="PreviousPage">Prev</button>
+                        <span>@((_model.PageStart + 1).ToString("N0"))-@Math.Min(_model.PageStart + _model.PageSize, _model.FilteredCount).ToString("N0") of @_model.FilteredCount.ToString("N0")</span>
+                        <button class="secondary compact" disabled="@(_model.Page >= _model.TotalPages - 1)" @onclick="NextPage">Next</button>
                     </div>
                 </section>
             </div>
@@ -234,8 +236,8 @@
                 <aside class="preview-panel @(_previewCollapsed ? "collapsed" : "")">
                     <div class="preview-head">
                         <strong>@(_previewRow?.Candidate.RelativePath ?? "Preview")</strong>
-                        <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="PreviousImageAsync">Prev</button>
-                        <button class="secondary compact" disabled="@(!_imageRows.Any())" @onclick="NextImageAsync">Next</button>
+                        <button class="secondary compact" disabled="@(!_model.ImageRows.Any())" @onclick="PreviousImageAsync">Prev</button>
+                        <button class="secondary compact" disabled="@(!_model.ImageRows.Any())" @onclick="NextImageAsync">Next</button>
                         <button class="secondary compact" disabled="@(_previewRow is null)" @onclick="OpenPreviewExternal">Open</button>
                         <button class="secondary compact" @onclick="() => _previewCollapsed = !_previewCollapsed">@(_previewCollapsed ? "Expand" : "Fold")</button>
                         <button class="secondary compact" @onclick="() => _previewPinned = false">Unpin</button>
@@ -268,6 +270,13 @@
 </div>
 
 @code {
+    private ResultsPresentationModel _model = default!;
+
+    private string? _previewDataUri;
+    private ScanResultRecord? _previewRow;
+    private bool _previewPinned = true;
+    private bool _previewCollapsed;
+
     private RenderFragment PreviewContent() => @<div class="preview-content">
         @if (_previewDataUri is not null && _previewRow is not null)
         {
@@ -280,66 +289,50 @@
     </div>;
 
     private RenderFragment ResultTable(IEnumerable<ScanResultRecord> rows) => @<table class="results-table">
-                <colgroup><col class="select-col" /><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
-                <thead><tr><th><input type="checkbox" checked="@IsPageSelected" @onchange="e => TogglePage((bool)e.Value!)" /></th><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
-                <tbody>
-                    @foreach (var row in rows)
-                    {
-                        var key = RowKey(row);
-                        <tr class="@(IsCurrentPreview(row) ? "current-row" : "")">
-                            <td><input type="checkbox" checked="@_selectedKeys.Contains(key)" @onchange="e => ToggleRow(row, (bool)e.Value!)" /></td>
-                            <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
-                            <td>@row.Candidate.Category</td>
-                            <td title="@row.Candidate.FullPath">
-                                @if (row.Candidate.Category == MediaCategory.Image)
-                                {
-                                    <button class="result-path-button" @onclick="() => PreviewImageAsync(row)">@row.Candidate.RelativePath</button>
-                                }
-                                else
-                                {
-                                    <span class="path-cell">@row.Candidate.RelativePath</span>
-                                }
-                            </td>
-                            <td>@FormatBytes(row.Candidate.SizeBytes)</td>
-                            <td>@row.Validator</td>
-                            <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
-                        </tr>
-                    }
-                    @if (!rows.Any())
-                    {
-                        <tr><td colspan="7" class="empty-cell">No results match the current filter.</td></tr>
-                    }
-                </tbody>
-            </table>;
+        <colgroup><col class="select-col" /><col class="status-col" /><col class="type-col" /><col /><col class="size-col" /><col class="validator-col" /><col class="detail-col" /></colgroup>
+        <thead><tr><th><input type="checkbox" checked="@_model.IsPageSelected" @onchange="e => TogglePage((bool)e.Value!)" /></th><th>Status</th><th>Type</th><th>Path</th><th>Size</th><th>Validator</th><th>Detail</th></tr></thead>
+        <tbody>
+            @foreach (var row in rows)
+            {
+                var key = ResultsPresentationModel.RowKey(row);
+                <tr class="@(IsCurrentPreview(row) ? "current-row" : "")">
+                    <td><input type="checkbox" checked="@_model.SelectedKeys.Contains(key)" @onchange="e => ToggleRow(row, (bool)e.Value!)" /></td>
+                    <td><span class="status-pill @row.Status.ToString().ToLowerInvariant()">@row.Status</span></td>
+                    <td>@row.Candidate.Category</td>
+                    <td title="@row.Candidate.FullPath">
+                        @if (row.Candidate.Category == MediaCategory.Image)
+                        {
+                            <button class="result-path-button" @onclick="() => PreviewImageAsync(row)">@row.Candidate.RelativePath</button>
+                        }
+                        else
+                        {
+                            <span class="path-cell">@row.Candidate.RelativePath</span>
+                        }
+                    </td>
+                    <td>@ResultsPresentationModel.FormatBytes(row.Candidate.SizeBytes)</td>
+                    <td>@row.Validator</td>
+                    <td><span class="detail-cell" title="@row.Detail">@row.Detail</span></td>
+                </tr>
+            }
+            @if (!rows.Any())
+            {
+                <tr><td colspan="7" class="empty-cell">No results match the current filter.</td></tr>
+            }
+        </tbody>
+    </table>;
+
     [Parameter] public string? Tab { get; set; }
 
-    private string ActiveTab = "all";
-    private string _searchText = string.Empty;
-    private string _detailGroup = string.Empty;
-    private List<ScanResultRecord> _visibleRows  = [];
-    private List<ScanResultRecord> _pagedRows  = [];
-    private List<ScanResultRecord> _imageRows = [];
-    private int                    _filteredCount = 0;
-    private int _page;
-    private int _pageSize = 50;
-    private int _pageStart => _page * _pageSize;
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filteredCount / (double)_pageSize));
-    private readonly HashSet<string> _selectedKeys = new(StringComparer.OrdinalIgnoreCase);
-    private ScanResultRecord? _previewRow;
-    private string? _previewDataUri;
-    private bool _previewPinned = true;
-    private bool _previewCollapsed;
-
-    private string TabTitle => ActiveTab switch
+    private string TabTitle => _model.ActiveTab switch
     {
         "searched"         => "Searched",
         "filtered-size"    => "Filtered out · size",
         "filtered-pattern" => "Filtered out · pattern",
         "filtered-family"  => "Filtered out · family",
-        _                  => ActiveTab
+        _                  => _model.ActiveTab
     };
 
-    private string TabDescription => ActiveTab switch
+    private string TabDescription => _model.ActiveTab switch
     {
         "searched"         => "Total files the discoverer inspected before applying any filter.",
         "filtered-size"    => "Files dropped because they were smaller than the minimum or larger than the maximum file size configured on the Media page.",
@@ -348,7 +341,7 @@
         _                  => string.Empty
     };
 
-    private long FilteredCount => ActiveTab switch
+    private long FilteredCount => _model.ActiveTab switch
     {
         "searched"         => State.TotalSearched,
         "filtered-size"    => State.FilteredOutSize,
@@ -356,25 +349,20 @@
         "filtered-family"  => State.FilteredOutFamily,
         _                  => 0
     };
-    private IReadOnlyList<string> DetailGroups => State.Results
-        .Select(r => NormalizeDetail(r.Detail))
-        .Where(x => !string.IsNullOrWhiteSpace(x))
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-        .Take(50)
-        .ToArray();
 
     protected override void OnInitialized()
     {
-        ActiveTab = ResolveTab(Tab);
+        _model = new ResultsPresentationModel(() => State.Results);
+        _model.ActiveTab = ResolveTab(Tab);
+        _model.SortOrder = State.ReportSort;
         State.Changed += OnStateChanged;
-        RebuildCache();
+        _model.RebuildCache();
     }
 
     protected override void OnParametersSet()
     {
-        ActiveTab = ResolveTab(Tab);
-        RebuildCache();
+        _model.ActiveTab = ResolveTab(Tab);
+        _model.RebuildCache();
     }
 
     public void Dispose() => State.Changed -= OnStateChanged;
@@ -390,50 +378,8 @@
 
     private void RebuildCache()
     {
-        if (ActiveTab is "searched" or "filtered-size" or "filtered-pattern" or "filtered-family")
-        {
-            _filteredCount = 0;
-            _visibleRows   = [];
-            return;
-        }
-
-        ValidationStatus? statusFilter = ActiveTab switch
-        {
-            "valid"   => ValidationStatus.Valid,
-            "corrupt" => ValidationStatus.Corrupt,
-            "unknown" => ValidationStatus.Unknown,
-            "error"   => ValidationStatus.Error,
-            "skipped" => ValidationStatus.Skipped,
-            _         => (ValidationStatus?)null
-        };
-
-        var sorted = State.ReportSort switch
-        {
-            "path"        => State.Results.OrderBy(x => x.Candidate.RelativePath),
-            "size-desc"   => State.Results.OrderByDescending(x => x.Candidate.SizeBytes),
-            "status-path" => State.Results.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
-            "detail"      => State.Results.OrderBy(x => NormalizeDetail(x.Detail)).ThenBy(x => x.Candidate.RelativePath),
-            "validator"   => State.Results.OrderBy(x => x.Validator).ThenBy(x => x.Candidate.RelativePath),
-            "newest"      => State.Results.OrderByDescending(x => x.TimestampUtc),
-            _             => (IEnumerable<ScanResultRecord>)State.Results
-        };
-
-        var filtered = sorted.Where(r =>
-        {
-            if (statusFilter.HasValue && r.Status != statusFilter.Value) return false;
-            if (!string.IsNullOrWhiteSpace(_detailGroup) && !NormalizeDetail(r.Detail).Equals(_detailGroup, StringComparison.OrdinalIgnoreCase)) return false;
-            if (string.IsNullOrWhiteSpace(_searchText)) return true;
-            return r.Candidate.RelativePath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-                || r.Candidate.FullPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-                || (r.Detail?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
-                || r.Validator.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
-        }).ToList();
-
-        _filteredCount = filtered.Count;
-        _visibleRows   = filtered;
-        _page = Math.Clamp(_page, 0, TotalPages - 1);
-        _pagedRows = _visibleRows.Skip(_pageStart).Take(_pageSize).ToList();
-        _imageRows = _visibleRows.Where(r => r.Candidate.Category == MediaCategory.Image).ToList();
+        _model.SortOrder = State.ReportSort;
+        _model.RebuildCache();
     }
 
     private Task CopyCorruptPaths()  => CopyPathsForStatus(ValidationStatus.Corrupt);
@@ -443,7 +389,7 @@
 
     private async Task CopyPathsForStatus(ValidationStatus status)
     {
-        var paths = _visibleRows
+        var paths = _model.VisibleRows
             .Where(r => r.Status == status)
             .Select(r => r.Candidate.FullPath);
         var copiedCount = paths.Count();
@@ -457,53 +403,35 @@
         State.NotifyChanged();
     }
 
-    private bool IsPageSelected => _pagedRows.Count > 0 && _pagedRows.All(r => _selectedKeys.Contains(RowKey(r)));
-    private static string RowKey(ScanResultRecord row) => row.Candidate.FullPath + "|" + row.TimestampUtc.ToUnixTimeMilliseconds();
-    private bool IsCurrentPreview(ScanResultRecord row) => _previewRow is not null && RowKey(_previewRow) == RowKey(row);
+    private bool IsCurrentPreview(ScanResultRecord row) => _previewRow is not null && ResultsPresentationModel.RowKey(_previewRow) == ResultsPresentationModel.RowKey(row);
 
     private void ToggleRow(ScanResultRecord row, bool selected)
     {
-        var key = RowKey(row);
-        if (selected) _selectedKeys.Add(key);
-        else _selectedKeys.Remove(key);
+        _model.ToggleRow(row, selected);
     }
 
     private void TogglePage(bool selected)
     {
-        foreach (var row in _pagedRows)
-            ToggleRow(row, selected);
+        _model.TogglePage(selected);
     }
 
-    private void SelectPage()
-    {
-        foreach (var row in _pagedRows)
-            _selectedKeys.Add(RowKey(row));
-    }
-
-    private void SelectFiltered()
-    {
-        foreach (var row in _visibleRows)
-            _selectedKeys.Add(RowKey(row));
-    }
-
-    private void ClearSelection() => _selectedKeys.Clear();
+    private void SelectPage() => _model.SelectPage();
+    private void SelectFiltered() => _model.SelectFiltered();
+    private void ClearSelection() => _model.ClearSelection();
 
     private void PreviousPage()
     {
-        if (_page > 0) _page--;
-        RebuildCache();
+        _model.PreviousPage();
     }
 
     private void NextPage()
     {
-        if (_page < TotalPages - 1) _page++;
-        RebuildCache();
+        _model.NextPage();
     }
 
     private void ResetPage()
     {
-        _page = 0;
-        RebuildCache();
+        _model.ResetPage();
     }
 
     private async Task WriteSelectedWithConfigAsync()
@@ -511,7 +439,7 @@
         var destination = await Picker.PickFolderAsync($"{State.ActionOperation} selected files", State.TargetRoot);
         if (string.IsNullOrWhiteSpace(destination)) return;
 
-        var selected = State.Results.Where(r => _selectedKeys.Contains(RowKey(r))).ToList();
+        var selected = State.Results.Where(r => _model.SelectedKeys.Contains(ResultsPresentationModel.RowKey(r))).ToList();
         var operation = State.ActionOperation;
         var layout = State.OutputPathLayout;
 
@@ -587,22 +515,19 @@
 
     private async Task PreviewImageAsync(ScanResultRecord row)
     {
-        if (!File.Exists(row.Candidate.FullPath))
-        {
-            State.Message = "Image file no longer exists: " + row.Candidate.FullPath;
-            State.NotifyChanged();
-            return;
-        }
-
         _previewRow = row;
         _previewDataUri = null;
         try
         {
-            var currentSizeBytes = new FileInfo(row.Candidate.FullPath).Length;
-            if (currentSizeBytes <= 10 * 1024 * 1024)
+            var dataUri = await ImagePreviewHelper.GetBase64DataUriAsync(row.Candidate.FullPath, row.Candidate.Extension);
+            if (dataUri is not null)
             {
-                var bytes = await File.ReadAllBytesAsync(row.Candidate.FullPath);
-                _previewDataUri = $"data:{ImageMime(row.Candidate.Extension)};base64,{Convert.ToBase64String(bytes)}";
+                _previewDataUri = dataUri;
+            }
+            else
+            {
+                State.Message = "Image is not previewable (e.g. too large or file is missing)";
+                State.NotifyChanged();
             }
         }
         catch (Exception ex)
@@ -620,22 +545,22 @@
 
     private async Task PreviousImageAsync()
     {
-        if (_imageRows.Count == 0) return;
+        if (_model.ImageRows.Count == 0) return;
         var index = CurrentImageIndex();
-        index = index <= 0 ? _imageRows.Count - 1 : index - 1;
-        await PreviewImageAsync(_imageRows[index]);
+        index = index <= 0 ? _model.ImageRows.Count - 1 : index - 1;
+        await PreviewImageAsync(_model.ImageRows[index]);
     }
 
     private async Task NextImageAsync()
     {
-        if (_imageRows.Count == 0) return;
+        if (_model.ImageRows.Count == 0) return;
         var index = CurrentImageIndex();
-        index = index < 0 || index >= _imageRows.Count - 1 ? 0 : index + 1;
-        await PreviewImageAsync(_imageRows[index]);
+        index = index < 0 || index >= _model.ImageRows.Count - 1 ? 0 : index + 1;
+        await PreviewImageAsync(_model.ImageRows[index]);
     }
 
     private int CurrentImageIndex() =>
-        _previewRow is null ? -1 : _imageRows.FindIndex(r => RowKey(r) == RowKey(_previewRow));
+        _previewRow is null ? -1 : _model.ImageRows.FindIndex(r => ResultsPresentationModel.RowKey(r) == ResultsPresentationModel.RowKey(_previewRow));
 
     private async Task HandleKeyAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
     {
@@ -694,7 +619,7 @@
             "path"        => source.OrderBy(x => x.Candidate.RelativePath),
             "size-desc"   => source.OrderByDescending(x => x.Candidate.SizeBytes),
             "status-path" => source.OrderBy(x => x.Status).ThenBy(x => x.Candidate.RelativePath),
-            "detail"      => source.OrderBy(x => NormalizeDetail(x.Detail)).ThenBy(x => x.Candidate.RelativePath),
+            "detail"      => source.OrderBy(x => ResultsPresentationModel.NormalizeDetail(x.Detail)).ThenBy(x => x.Candidate.RelativePath),
             "validator"   => source.OrderBy(x => x.Validator).ThenBy(x => x.Candidate.RelativePath),
             "newest"      => source.OrderByDescending(x => x.TimestampUtc),
             _             => source
@@ -710,25 +635,4 @@
         State.Message = "Exported: " + path;
         State.NotifyChanged();
     }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes >= 1_048_576) return (bytes / 1_048_576d).ToString("N1") + " MB";
-        if (bytes >= 1_024)     return (bytes / 1_024d).ToString("N1") + " KB";
-        return bytes + " B";
-    }
-
-    private static string FormatTime(DateTimeOffset? value) => value?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
-    private static string FormatPercent(double value, double total) => total <= 0 ? "n/a" : $"{Math.Clamp(value / total, 0, 1):P0}";
-    private static string NormalizeDetail(string? detail) => string.IsNullOrWhiteSpace(detail) ? "No detail" : detail.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "No detail";
-    private static string ImageMime(string extension) => extension.ToLowerInvariant() switch
-    {
-        ".jpg" or ".jpeg" or ".jpe" or ".jfif" => "image/jpeg",
-        ".png" => "image/png",
-        ".gif" => "image/gif",
-        ".webp" => "image/webp",
-        ".bmp" or ".dib" => "image/bmp",
-        ".svg" => "image/svg+xml",
-        _ => "application/octet-stream"
-    };
 }

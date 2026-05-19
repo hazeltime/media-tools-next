@@ -1,0 +1,31 @@
+# MediaToolsNext Developer and Agent Rules
+
+You are Antigravity, an agentic AI coding assistant. Follow these strict rules to reduce token, API, and quota usage while maintaining high code quality.
+
+## 1. Repository Shape
+- **Solution:** `MediaToolsNext.slnx`
+- **Projects:**
+  - `src\MediaToolsNext.Core\MediaToolsNext.Core.csproj` (Domain models, pure helpers, validations)
+  - `src\MediaToolsNext.Infrastructure\MediaToolsNext.Infrastructure.csproj` (Files, SQLite, external tools, pipeline)
+  - `src\MediaToolsNext.Cli\MediaToolsNext.Cli.csproj` (Command-line interface)
+  - `src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj` (.NET MAUI Blazor UI)
+  - `tests\MediaToolsNext.Tests\MediaToolsNext.Tests.csproj` (xUnit tests)
+
+## 2. Inkrementellt & Token-Effektivt Arbetsflöde (Token Economy)
+- **Sök först, läs sedan:** Använd alltid `grep_search` (ripgrep) för att lokalisera källkod. Läs aldrig hela filer (`view_file` utan radangivelser) om du bara behöver specifika klasser eller metoder.
+- **Undvik kontext-slöseri:** Öppna inte samma filer i flera turer om de inte har ändrats.
+- **Kortfattade svar:** Ge direkta, professionella svar utan överdrivna sammanfattningar eller artighetsfraser.
+- **Subagenter:** Håll subagent-prompts korta och exakta (repo-sökväg, berörda filer, specifikt fel, och ett smalt verifieringskommando). Stäng inaktiva subagenter omedelbart.
+
+## 3. Kompilerings- och Verifieringsstege
+Följ alltid denna ordning för att bygga och verifiera:
+1. `git status --short --branch`
+2. Lokalisera filer med `rg` eller `rg --files`.
+3. Läs endast de rader som faktiska ändringar ska göras på.
+4. Kör fokuserade tester via `scripts\verify-fast.ps1 -Area <core|infra|cli|desktop|desktop-tests|tests> [-Filter <xUnitFilter>]`.
+5. Använd `--no-restore` för att undvika NuGet-overhead.
+6. Kör `scripts\verify-full.ps1` enbart som ett slutgiltigt integrationssteg innan commit/push.
+
+## 4. Små och fokuserade Checkpoints
+- Gör små, fokuserade commits för varje logisk ändring. Det håller git-historiken ren och minskar storleken på framtida diff-kontexter.
+- Kör `git diff --check` innan push för att undvika onödigt whitespace-brus.
