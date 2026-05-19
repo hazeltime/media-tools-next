@@ -1,3 +1,4 @@
+using System.Reflection;
 using MediaToolsNext.Core;
 using MediaToolsNext.Cli;
 using MediaToolsNext.Infrastructure;
@@ -17,9 +18,19 @@ var cancellationToken = cts.Token;
 // -----------------------------------------------------------------------
 // Argument parsing
 // -----------------------------------------------------------------------
-if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
+if (HasAnyArg("--version", "-v"))
+{
+    Console.WriteLine(GetVersion());
+    return;
+}
+
+if (args.Length < 2 || HasAnyArg("--help", "-h", "-?"))
 {
     Console.WriteLine("Usage: MediaToolsNext.Cli <source> <target> [options]");
+    Console.WriteLine();
+    Console.WriteLine("Global:");
+    Console.WriteLine("  -h, -?, --help                    Show help");
+    Console.WriteLine("  -v, --version                     Show version");
     Console.WriteLine();
     Console.WriteLine("Options:");
     Console.WriteLine("  --preview                         Discover matches without scanning or writing");
@@ -35,6 +46,15 @@ if (args.Length < 2 || args.Contains("--help") || args.Contains("-h"))
     Console.WriteLine("  --concurrency <1-32>              Override hardware-tuned concurrency");
     Console.WriteLine("  --probe-seconds <10-600>          Override hardware-tuned media probe duration");
     Console.WriteLine("  --tool-timeout-seconds <5-600>    External tool timeout");
+    Console.WriteLine("  --max-searched-files <count>      Stop after searching this many files");
+    Console.WriteLine("  --max-matched-files <count>       Stop after matching this many files");
+    Console.WriteLine("  --max-searched-dirs <count>       Stop after searching this many directories");
+    Console.WriteLine("  --max-matched-dirs <count>        Stop after matching this many directories");
+    Console.WriteLine("  --min-runtime-seconds <seconds>   Minimum runtime before search or match limits stop a run");
+    Console.WriteLine("  --min-scanned-mb <mb>             Minimum scanned MB before byte limits stop a run");
+    Console.WriteLine("  --max-scanned-mb <mb>             Stop after scanning this many MB");
+    Console.WriteLine("  --min-matched-mb <mb>             Minimum matched MB before byte limits stop a run");
+    Console.WriteLine("  --max-matched-mb <mb>             Stop after matching this many MB");
     Console.WriteLine();
     Console.WriteLine("Profiles:");
     foreach (var p in ScanProfiles.All)
@@ -143,6 +163,21 @@ string? ValueAfter(string name)
 {
     var index = Array.IndexOf(args, name);
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+}
+
+bool HasAnyArg(params string[] names) => args.Any(names.Contains);
+
+static string GetVersion()
+{
+    var assembly = Assembly.GetExecutingAssembly();
+    var informationalVersion = assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        ?.InformationalVersion;
+
+    if (!string.IsNullOrWhiteSpace(informationalVersion))
+        return informationalVersion;
+
+    return assembly.GetName().Version?.ToString() ?? "unknown";
 }
 
 static async Task<bool> RunHealthCheckAsync(ScanOptions options, ExternalToolProbe tools, CancellationToken cancellationToken)
