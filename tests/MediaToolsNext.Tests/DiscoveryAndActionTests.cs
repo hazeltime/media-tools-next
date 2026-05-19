@@ -463,6 +463,33 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task CopySortedAndBackupPreservesBackupWriteFailureWhenCleanupFails()
+    {
+        var root = NewTempDir();
+        try
+        {
+            var source = Path.Combine(root, "a.txt");
+            var target = Path.Combine(root, "target");
+            var backup = Path.Combine(root, "backup");
+            File.WriteAllText(source, "hello");
+            Directory.CreateDirectory(Path.Combine(backup, "valid", "docs", "a.txt"));
+            var candidate = new FileCandidate(source, "docs/a.txt", ".txt", MediaCategory.Document, 5, DateTimeOffset.UtcNow);
+            var outcome = new ValidationOutcome(candidate, ValidationStatus.Valid, "test", null, TimeSpan.Zero);
+            var options = ScanOptions.CreateDefault(root, target, Path.Combine(root, "db.sqlite")) with
+            {
+                ActionMode = ScanActionMode.CopySortedAndBackup,
+                BackupRoot = backup
+            };
+            var service = new FileActionService(_ => throw new IOException("cleanup failed"));
+
+            var ex = await Assert.ThrowsAnyAsync<Exception>(() => service.ApplyAsync(outcome, options, CancellationToken.None));
+
+            Assert.DoesNotContain("cleanup failed", ex.Message);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task CopySortedSkipsUnselectedOutcomes()
     {
         var root = NewTempDir();

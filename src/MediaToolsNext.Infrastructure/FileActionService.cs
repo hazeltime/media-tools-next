@@ -102,7 +102,7 @@ public sealed class FileActionService : IFileActionService
         }
     }
 
-    private static async Task<(string PrimaryTarget, string BackupTarget)> CopyToSharedAvailablePathsAsync(
+    private async Task<(string PrimaryTarget, string BackupTarget)> CopyToSharedAvailablePathsAsync(
         string source,
         string primaryTarget,
         string backupTarget,
@@ -138,14 +138,26 @@ public sealed class FileActionService : IFileActionService
             }
             catch (IOException ex) when (IsAlreadyExists(ex))
             {
-                File.Delete(primaryCandidate);
+                TryDeletePartialPrimary(primaryCandidate);
                 continue;
             }
             catch
             {
-                File.Delete(primaryCandidate);
+                TryDeletePartialPrimary(primaryCandidate);
                 throw;
             }
+        }
+    }
+
+    private void TryDeletePartialPrimary(string path)
+    {
+        try
+        {
+            _deleteFile(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Preserve the original backup write failure; cleanup errors are secondary.
         }
     }
 
