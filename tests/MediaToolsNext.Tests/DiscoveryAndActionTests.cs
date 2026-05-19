@@ -293,6 +293,41 @@ public class DiscoveryAndActionTests
     }
 
     [Fact]
+    public async Task DiscoveryDoesNotSearchPastMaxSearchedFilesLimit()
+    {
+        var root = NewTempDir();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "A_keep.jpg"), "12345");
+            File.WriteAllText(Path.Combine(root, "B_stop.jpg"), "12345");
+            var searched = 0;
+            var progress = new Progress<ScanDiscoveryEvent>(e =>
+            {
+                if (e.Type == DiscoveryEventType.Searched)
+                    searched++;
+            });
+            var limitState = new ScanLimitState();
+            var options = ScanOptions.CreateDefault(root, Path.Combine(root, "target"), Path.Combine(root, "db.sqlite")) with
+            {
+                EnableVideo = false,
+                EnableAudio = false,
+                EnableDocuments = false,
+                MaxSearchedFiles = 1,
+                LimitState = limitState
+            };
+
+            var files = new List<FileCandidate>();
+            await foreach (var file in new FileDiscoverer().DiscoverAsync(options, CancellationToken.None, progress))
+                files.Add(file);
+
+            Assert.Single(files);
+            Assert.Equal(1, searched);
+            Assert.Equal("Stopped after inspecting 1 searched files.", limitState.StopReason);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task DiscoveryAppliesWildcardFiltersBeforeMatchedFileLimit()
     {
         var root = NewTempDir();
