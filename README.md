@@ -35,22 +35,36 @@ ImageMagick is also probed under `Program Files` when `magick` is not on `PATH`.
 
 ```powershell
 dotnet test tests\MediaToolsNext.Tests\MediaToolsNext.Tests.csproj
+dotnet test tests\MediaToolsNext.Desktop.Tests\MediaToolsNext.Desktop.Tests.csproj
 dotnet build src\MediaToolsNext.Cli\MediaToolsNext.Cli.csproj
 dotnet build src\MediaToolsNext.Desktop\MediaToolsNext.Desktop.csproj -f net10.0-windows10.0.19041.0
+```
+
+Collect coverage:
+
+```powershell
+dotnet test tests\MediaToolsNext.Tests\MediaToolsNext.Tests.csproj --collect:"XPlat Code Coverage"
+dotnet test tests\MediaToolsNext.Desktop.Tests\MediaToolsNext.Desktop.Tests.csproj --collect:"XPlat Code Coverage"
 ```
 
 ## CLI
 
 ```powershell
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target>
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --preview
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --live
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --backup <backup> --live
 dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --concurrency <1-32>
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --probe-seconds <10-600>
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --tool-timeout-seconds <5-600>
+dotnet run --project src\MediaToolsNext.Cli -- <source> <target> --export results.csv
 ```
 
 Without `--live`, no files are copied.
-If `--concurrency` is omitted, the CLI uses 8 workers. Explicit values are clamped to the 1-32 range.
+If `--concurrency` is omitted, the CLI uses the hardware tuner recommendation. Explicit values are clamped to the 1-32 range.
+If `--probe-seconds` is omitted, the CLI uses the hardware tuner recommendation.
 If `--profile` is omitted, the CLI uses `deep-images`, which performs the in-depth image check. The external tool timeout defaults to 15 seconds unless overridden.
+Use `--flat`, `--move`, and `--group-category` to change write layout and operation in live modes.
 
 ## Desktop
 
